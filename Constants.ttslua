@@ -1,0 +1,18 @@
+C = {}
+C.board_guid = "d78f46"
+
+C.player_boards = {
+  Yellow = {g="",},
+  Red = {g="",},
+  Green = {g="",},
+  Blue = {g="",},
+  Purple = {g="",},
+}
+
+C.action_dials = {
+  Yellow = {dg="", p1g="", p2g=""},
+  Red = {dg="", p1g="", p2g=""},
+  Green = {dg="efb65d", p1g="143d09", p2g="df3736"},
+  Blue = {dg="", p1g="", p2g=""},
+  Purple = {dg="", p1g="", p2g=""},
+}

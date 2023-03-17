@@ -1,0 +1,39 @@
+-- #include tts-maharaja/Global
+
+
+function onLoad(save_state)
+	log("onLoad() .. Using project global file!")
+end
+
+function onSave()
+end
+
+
+function getLTB(pcol)
+  log("Getting positions of selected objects relative to board")
+  local stuff = Player[pcol].getSelectedObjects()
+  log(#stuff.." selected objects to process")
+  local board = getObjectFromGUID(C.board_guid)
+  local s = ""
+  for i,o in ipairs(stuff) do
+    log("Processing object #"..tostring(i)..": "..o.getGUID())
+    local p = board.positionToLocal(o.getPosition())
+    local r = o.getRotation()
+		-- City house positions
+    local t = '{p={'..p.x..','..p.y..','..p.z..'},{r='..r.x..','..r.y..','..r.z..'}},'
+    log(t)
+    s = s .. t .. '\n'
+  end
+  if s ~= "" then
+    Notes.setNotes(s)
+  end
+end
+
+test = {
+  {p={0.624050140380859,0.215901017189026,0.26046359539032},{r=1.60509043780621E-05,179.994125366211,6.86197324739624E-07}},
+  {p={0.585041046142578,0.21589982509613,0.260502010583878},{r=5.57859857508447E-05,179.991256713867,1.05628384972078E-06}},
+  {p={0.546089947223663,0.215901136398315,0.260495036840439},{r=5.62009590794332E-05,179.994216918945,7.64223727856006E-07}},
+}
+
+require("tts-maharaja/Constants")
+require("tts-lib/utils")

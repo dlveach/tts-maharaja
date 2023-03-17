@@ -1,0 +1,6 @@
+<!-- Xml UI. See documentation: https://api.tabletopsimulator.com/ui/introUI/ -->
+<XmlLayout xmlns="XmlLayout"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd">
+
+</XmlLayout>

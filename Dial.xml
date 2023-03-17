@@ -1,0 +1,126 @@
+<XmlLayout xmlns="XmlLayout"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd">
+
+
+<Defaults>
+
+  <Panel class="buttonPanel"
+        active="true"
+        color="0,0,0,0"
+        height="50" width="50"
+        rotation="0 0 0"
+        scale="1 1" />
+
+  <Panel class="playerPanel"
+        active="true"
+        color="rgba(0,0,0,0)"
+        position="0 300 -5"
+        height="200" width="400"
+        rotation="0 0 180"
+        scale="1 1" />
+
+  <Button class="dialButton"
+        hoverClass="hover"
+        pressClass="press"
+        selectClass="select"
+        onClick="dialClick"
+        image="teal_dot"
+        color="rgba(0,0,0,0)" />
+
+  <Button class="playerButton"
+        hoverClass="hover"
+        pressClass="press"
+        selectClass="select"
+        onClick="buttonClick"
+        image="Sprites/Layout/Button"
+        color="Blue" />
+  <Button class="hover"
+        color="Cyan" />
+  <Button class="press"
+        color="White" />
+  <Button class="select"
+        color="White" />
+
+  <TableLayout
+        useGlobalCellPadding="false"
+        rowBackgroundColor="rgba(0,0,0,0)" />
+
+  <Row
+        dontUseTableRowBackground="true"
+        color="rgba(0,0,0,0)"  />
+
+  <Cell
+        dontUseTableCellBackground="true" />  <!-- set to false to show grid lines -->
+
+</Defaults>
+
+<Panel id="back_button_panel" active="true"
+  color="rgba(0,0,0,0)"
+  height="100" width="100"
+  rotation="180 0 0"
+  position="0 0 10"
+  scale="1 1"
+  >
+  <Button id="unconfirm" onClick="buttonClick"/>
+</Panel>
+
+<Panel class="playerPanel" id="player_btn_panel" active="false">
+  <TableLayout>
+    <Row preferredHeight="60">
+      <Cell padding="5 5 0 0">
+        <!--Button id="btn_1" class="playerButton">
+          <Text id="btn_1_txt" fontSize="20" color="rgb(1,1,0)" text="Button 1"/>
+        </Button-->
+      </Cell>
+      <Cell padding="5 5 0 0">
+        <Button id="confirm" class="playerButton">
+          <Text fontSize="20" color="rgb(1,1,0)" text="Confirm"/>
+        </Button>
+      </Cell>
+      <Cell padding="5 5 0 0">
+        <!--Button id="btn_3" class="playerButton">
+          <Text id="btn_3_txt" fontSize="20" color="rgb(1,1,0)" text="Button 2"/>
+        </Button-->
+      </Cell>
+    </Row>
+  </TableLayout>
+</Panel>
+
+<Panel class="buttonPanel" id="track_panel" position="0 140 -10" >
+  <Button class="dialButton" id="track_btn" />
+</Panel>
+
+<Panel class="buttonPanel" id="coins_panel" position="90 100 -10" >
+  <Button class="dialButton" id="coins_btn"/>
+</Panel>
+
+<Panel class="buttonPanel" id="character_panel" position="140 20 -10" >
+  <Button class="dialButton" id="character_btn"/>
+</Panel>
+
+<Panel class="buttonPanel" id="palace-house_panel" position="130 -80 -10" >
+  <Button class="dialButton" id="palace-house_btn"/>
+</Panel>
+
+<Panel class="buttonPanel" id="palace_panel" position="60 -140 -10" >
+  <Button class="dialButton" id="palace_btn"/>
+</Panel>
+
+<Panel class="buttonPanel" id="quarry_panel" position="-40 -140 -10" >
+  <Button class="dialButton" id="quarry_btn"/>
+</Panel>
+
+<Panel class="buttonPanel" id="move_panel" position="-120 -80 -10" >
+  <Button class="dialButton" id="move_btn"/>
+</Panel>
+
+<Panel class="buttonPanel" id="2-houses_panel" position="-140 20 -10" >
+  <Button class="dialButton" id="2-houses_btn"/>
+</Panel>
+
+<Panel class="buttonPanel" id="house_panel" position="-90 100 -10" >
+  <Button class="dialButton" id="house_btn"/>
+</Panel>
+
+</XmlLayout>

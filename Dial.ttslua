@@ -1,0 +1,186 @@
+--[[///////////////////////////////////////////////////////////////////////////////////////////////
+Maharaja player action dial
+
+  --TODO:
+    - object UI wrapper
+    - save/load/restore state
+
+///////////////////////////////////////////////////////////////////////////////////////////////////]]
+
+
+g_buttons = {"track","coins","character","palace-house","palace","quarry","move","2-houses","house",}
+g_pointer_rot_offsets = {184,142,104,64,28,-15,-55,-95,-135}
+g_pointer = {
+  name = "pointer-1",
+  url = "http://cloud-3.steamusercontent.com/ugc/2019340792116360259/E5713D1160D784E5B340DCF8D114569C9E560938/",
+  position = Vector(0.01,0.1,-0.05),
+  rotation = Vector(90, 180, 0),
+  scale = Vector(2,2,1),
+}
+g_back_decal = {
+  name = "dial_back",
+  url = "http://cloud-3.steamusercontent.com/ugc/2019340792119743844/FBF1CD3789663DD96F5C9D218ED931973551A259/",
+  position = Vector(0.08,-0.06,-0.03),
+  rotation = Vector(270,0,0),
+  scale = Vector(5.1,5.1,1),
+}
+g_player_colors = {"Yellow","Red","Green","Blue","Purple"}
+
+env = {}
+env.test = {}
+env.test.force_fresh_save = true
+env.test.trace = true
+env.test.debug = true
+
+function onLoad(save_state)
+  GD = {}
+  GD.color = self.getName()
+  if save_state ~= "" then
+    if env.test.trace then log(GD.color..": onLoad(): Loading from saved state") end
+    local restore_data = JSON.decode(saved_data)
+    GD = restore_data
+
+    --TODO: restore UI state
+    --TODO: do decals survive reload?
+
+  else
+    if env.test.trace then log(GD.color..": onLoad(): Loading from fresh state") end
+    GD.state = {}
+    GD.state.action_1 = 0
+    GD.state.action_2 = 0
+    GD.state.click = 0
+    --setup visibility string
+    GD.hide_from_players = {}
+    for _,pcol in ipairs(g_player_colors) do
+      if pcol ~= GD.color then
+        table.insert(GD.hide_from_players, pcol)
+      end
+    end
+    --setup dial decals
+    self.setDecals({})
+    local p = simpleDeepCopy(g_pointer)
+    p.name = "pointer-1"
+    self.addDecal(p)
+    p.name = "pointer-2"
+    self.addDecal(p)
+    self.addDecal(g_back_decal)
+    --setup button visiblity
+    for _,btn in ipairs(g_buttons) do
+      self.UI.setAttribute(btn.."_panel","visibility",GD.color)
+    end
+    self.UI.setAttribute("player_btn_panel","visibility",GD.color)
+    self.UI.setAttribute("back_button_panel","visibility",GD.color)
+  end
+end
+
+function onSave()
+  local saved_data = JSON.encode(GD)
+  if env.test.force_fresh_save then
+    saved_data = ""
+  end
+  return saved_data
+end
+
+function enableButtons()
+  if env.test.trace then log(GD.color..": enableButtons()") end
+  for _,action in ipairs(g_buttons) do
+    self.UI.setAttribute(action.."_panel","active","true")
+  end
+end
+
+function disableButtons()
+  if env.test.trace then log(GD.color..": disableButtons()") end
+  for _,action in ipairs(g_buttons) do
+    self.UI.setAttribute(action.."_panel","active","false")
+  end
+end
+
+function buttonClick(player, btn, id)
+  if env.test.trace then log(GD.color..": buttonClick(): id="..tostring(id)) end
+  if player.color ~= GD.color then return end
+  if id == "confirm" then
+    disableButtons()
+    flipMe()
+    Wait.condition(function() showMe() end, function() return self.resting end, 3)
+
+    --TODO:
+    log("TODO: call global to confirm player action selections")
+
+  elseif id =="unconfirm" then
+    --TODO:
+    log("TODO: call global to unconfirm player action selection")
+    hideMe()
+    enableButtons()
+    flipMe()
+  else
+    log("ERROR: unknown button id")
+  end
+end
+
+function dialClick(player, btn, id)
+  if env.test.trace then log(GD.color..": dialClick(): id="..tostring(id)) end
+  local action = Split(id,'_')[1]
+  local index = indexOf(g_buttons,action)
+  local id = ""
+  assert(index > 0, GD.color..": ERROR: dialClick() no button index found for action")
+  if GD.state.click == 1 or GD.state.click == 0 then
+    GD.state.action_1 = index
+    id = "pointer-1"
+    GD.state.click = 2
+  else
+    GD.state.action_2 = index
+    id = "pointer-2"
+    GD.state.click = 1
+    self.UI.setAttribute("player_btn_panel","active","true")
+  end
+  setPointerRotation(id, index)
+end
+
+function setPointerRotation(id, index)
+  local decals = self.getDecals()
+  local rot = self.getRotation()
+  local offset = g_pointer_rot_offsets[index]
+  assert(decals[1] ~= nil and decals[1].name == "pointer-1", GD.color..": ERROR: setPointerRotation(): Invalid pointer 1 decal")
+  assert(decals[2] ~= nil and decals[2].name == "pointer-2", GD.color..": ERROR: setPointerRotation(): Invalid pointer 2 decal")
+  if id == decals[1].name then
+    decals[1].rotation.z = rot.z + offset
+  elseif id == decals[2].name then
+    decals[2].rotation.z = rot.z + offset
+  else
+    log(GD.color..": ERROR: setPointerRotation(): Decal id "..tostring(id).." not found")
+    return
+  end
+  self.setDecals(decals)
+end
+
+function hideMe()
+  self.setInvisibleTo(GD.hide_from_players)
+end
+
+function showMe()
+  self.setInvisibleTo({})
+end
+
+function flipMe()
+  if self.is_face_down then
+    self.UI.setAttribute("player_btn_panel","active",true)
+    GD.state.flipped = false
+  else
+    self.UI.setAttribute("player_btn_panel","active",false)
+    GD.state.flipped = true
+  end
+  self.setLock(false)
+  self.flip()
+  Wait.condition(function() self.setLock(true) end, function() return self.resting end, 3)
+end
+
+
+
+
+function dumpData(params)
+  log("State data for "..self.getGUID()..": "..GD.color)
+  log(GD)
+end
+
+
+require("tts-lib/utils")

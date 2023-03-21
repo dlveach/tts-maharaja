@@ -15,8 +15,8 @@
   <Panel class="playerPanel"
         active="true"
         color="rgba(0,0,0,0)"
-        position="0 300 -5"
-        height="200" width="400"
+        position="0 375 -5"
+        height="300" width="400"
         rotation="0 0 180"
         scale="1 1" />
 
@@ -55,14 +55,17 @@
 
 </Defaults>
 
-<Panel id="back_button_panel" active="true"
+<Panel id="back_button_panel" active="false"
   color="rgba(0,0,0,0)"
   height="100" width="100"
   rotation="180 0 0"
   position="0 0 10"
   scale="1 1"
+  padding="0 0 20 20"
   >
-  <Button id="unconfirm" onClick="buttonClick"/>
+  <Button class="playerButton" id="unconfirm" >
+    <Text fontSize="20" color="rgb(1,1,0)" text="Modify" />
+  </Button>
 </Panel>
 
 <Panel class="playerPanel" id="player_btn_panel" active="false">
@@ -84,6 +87,39 @@
         </Button-->
       </Cell>
     </Row>
+    <Row preferredHeight="30" />
+    <Row id="action_A_row" preferredHeight="60">
+      <Cell padding="0 0 0 0">
+        <Text fontSize="40" color="Gray" text="A"/>
+      </Cell>
+      <Cell columnSpan="2" padding="0 0 0 0">
+        <Button id="action-A" class="playerButton">
+          <Text id="action_A_txt" fontSize="30" color="rgb(1,1,0)" text="Action A" />
+        </Button>
+      </Cell>
+    </Row>
+    <Row preferredHeight="10" />
+    <Row id="action_B_row" preferredHeight="60">
+      <Cell padding="0 0 0 0">
+        <Text fontSize="40" color="Gray" text="B"/>
+      </Cell>
+      <Cell columnSpan="2" padding="0 0 0 0">
+        <Button id="action-B" class="playerButton">
+          <Text id="action_B_txt" fontSize="30" color="rgb(1,1,0)" text="Action B" />
+        </Button>
+      </Cell>
+    </Row>
+    <Row preferredHeight="10" />
+    <Row id="action_C_row" preferredHeight="60">
+      <Cell padding="0 0 0 0">
+        <Text fontSize="40" color="Gray" text="C"/>
+      </Cell>
+      <Cell columnSpan="2" padding="0 0 0 0">
+        <Button id="action-C" class="playerButton">
+          <Text id="action_C_txt" fontSize="30" color="rgb(1,1,0)" text="Action C" />
+        </Button>
+      </Cell>
+    </Row>
   </TableLayout>
 </Panel>
 
@@ -92,7 +128,7 @@
 </Panel>
 
 <Panel class="buttonPanel" id="coins_panel" position="90 100 -10" >
-  <Button class="dialButton" id="coins_btn"/>
+  <Button class="dialButton" id="coins_btn" />
 </Panel>
 
 <Panel class="buttonPanel" id="character_panel" position="140 20 -10" >

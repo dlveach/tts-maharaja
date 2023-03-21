@@ -4,6 +4,7 @@ Maharaja player action dial
   --TODO:
     - object UI wrapper
     - save/load/restore state
+    - connections to Global
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////]]
 
@@ -32,6 +33,9 @@ env.test.force_fresh_save = true
 env.test.trace = true
 env.test.debug = true
 
+--[[ *****************************
+Load function
+********************************]]
 function onLoad(save_state)
   GD = {}
   GD.color = self.getName()
@@ -68,11 +72,13 @@ function onLoad(save_state)
     for _,btn in ipairs(g_buttons) do
       self.UI.setAttribute(btn.."_panel","visibility",GD.color)
     end
-    self.UI.setAttribute("player_btn_panel","visibility",GD.color)
-    self.UI.setAttribute("back_button_panel","visibility",GD.color)
+    resetPlayerButtons()
   end
 end
 
+--[[ *****************************
+--TODO: document
+********************************]]
 function onSave()
   local saved_data = JSON.encode(GD)
   if env.test.force_fresh_save then
@@ -81,61 +87,154 @@ function onSave()
   return saved_data
 end
 
-function enableButtons()
-  if env.test.trace then log(GD.color..": enableButtons()") end
+function resetPlayerButtons()
+  self.UI.setAttribute("confirm","active",false)
+  self.UI.setAttribute("player_btn_panel","visibility",GD.color)
+  self.UI.setAttribute("back_button_panel","visibility",GD.color)
+  self.UI.setAttribute("action_A_row","active",false)
+  self.UI.setAttribute("action-A","active",false)
+  self.UI.setAttribute("action_B_row","active",false)
+  self.UI.setAttribute("action-B","active",false)
+  self.UI.setAttribute("action_C_row","active",false)
+  self.UI.setAttribute("action-C","active",false)
+end
+
+--[[ *****************************
+--TODO: document
+********************************]]
+function  resetActionPointers()
+  if env.test.trace then log(GD.color..": resetActionPointers()") end
+  local decals = self.getDecals()
+  local rot = self.getRotation()
+  assert(decals[1] ~= nil and decals[1].name == "pointer-1", GD.color..": ERROR: setPointerRotation(): Invalid pointer 1 decal")
+  assert(decals[2] ~= nil and decals[2].name == "pointer-2", GD.color..": ERROR: setPointerRotation(): Invalid pointer 2 decal")
+  decals[1].rotation.z = rot.z + 180
+  decals[2].rotation.z = rot.z + 180
+  self.setDecals(decals)
+end
+
+--[[ *****************************
+--TODO: document
+********************************]]
+function setToActivePlayer()
+  if env.test.trace then log(GD.color..": setToActivePlayer()") end
+  disableDialButtons()
+  if GD.state.flipped then flipMe() end
+  showMe()
+end
+
+--[[ *****************************
+--TODO: document
+********************************]]
+function setToActionSelection()
+  if env.test.trace then log(GD.color..": setToActionSelection()") end
+  self.UI.setAttribute("back_button_panel","active",true)
+  GD.state.action_1 = 0
+  GD.state.action_2 = 0
+  GD.state.click = 0
+  endableDialButtons()
+  resetPlayerButtons()
+  resetActionPointers()
+  if GD.state.flipped then flipMe() end
+end
+
+--[[ *****************************
+--TODO: document
+********************************]]
+function endableDialButtons()
+  if env.test.trace then log(GD.color..": endableDialButtons()") end
   for _,action in ipairs(g_buttons) do
     self.UI.setAttribute(action.."_panel","active","true")
   end
 end
 
-function disableButtons()
-  if env.test.trace then log(GD.color..": disableButtons()") end
+--[[ *****************************
+--TODO: document
+********************************]]
+function disableDialButtons()
+  if env.test.trace then log(GD.color..": disableDialButtons()") end
   for _,action in ipairs(g_buttons) do
     self.UI.setAttribute(action.."_panel","active","false")
   end
 end
 
+--[[ *****************************
+--TODO: document
+********************************]]
+function lockActionSelections()
+  if env.test.trace then log(GD.color..": lockActionSelections()") end
+  self.UI.setAttribute("back_button_panel","active",false)
+end
+
+--[[ *****************************
+--TODO: document
+********************************]]
 function buttonClick(player, btn, id)
   if env.test.trace then log(GD.color..": buttonClick(): id="..tostring(id)) end
   if player.color ~= GD.color then return end
   if id == "confirm" then
-    disableButtons()
+    disableDialButtons()
     flipMe()
     Wait.condition(function() showMe() end, function() return self.resting end, 3)
 
     --TODO:
-    log("TODO: call global to confirm player action selections")
+    log("TODO: call global to set player action selections")
 
   elseif id =="unconfirm" then
     --TODO:
-    log("TODO: call global to unconfirm player action selection")
+    log("TODO: call global to unset player action selection")
     hideMe()
-    enableButtons()
+    endableDialButtons()
     flipMe()
+  elseif id == "action-A" then
+    log("TODO: handle action A")
+    self.UI.setAttribute("action-A","active",false)
+  elseif id == "action-B" then
+    log("TODO: handle action B")
+    self.UI.setAttribute("action-B","active",false)
+  elseif id == "action-C" then
+    log("TODO: handle action C")
+    self.UI.setAttribute("action-C","active",false)
   else
     log("ERROR: unknown button id")
   end
 end
 
+--[[ *****************************
+--TODO: document
+********************************]]
 function dialClick(player, btn, id)
   if env.test.trace then log(GD.color..": dialClick(): id="..tostring(id)) end
   local action = Split(id,'_')[1]
   local index = indexOf(g_buttons,action)
   local id = ""
   assert(index > 0, GD.color..": ERROR: dialClick() no button index found for action")
+  if GD.state.extra_action then
+    --TODO: handle this
+  end
   if GD.state.click == 1 or GD.state.click == 0 then
     GD.state.action_1 = index
     id = "pointer-1"
+    self.UI.setAttribute("action_A_txt","text",action)
+    self.UI.setAttribute("action_A_row","active",true)
+    self.UI.setAttribute("action-A","active",true)
     GD.state.click = 2
   else
     GD.state.action_2 = index
     id = "pointer-2"
     GD.state.click = 1
-    self.UI.setAttribute("player_btn_panel","active","true")
+    self.UI.setAttribute("action_B_txt","text",action)
+    self.UI.setAttribute("action_B_row","active",true)
+    self.UI.setAttribute("action-B","active",true)
+    self.UI.setAttribute("confirm","active",true)
   end
   setPointerRotation(id, index)
+  self.UI.setAttribute("player_btn_panel","active","true")
 end
 
+--[[ *****************************
+--TODO: document
+********************************]]
 function setPointerRotation(id, index)
   local decals = self.getDecals()
   local rot = self.getRotation()
@@ -153,17 +252,25 @@ function setPointerRotation(id, index)
   self.setDecals(decals)
 end
 
+--[[ *****************************
+--TODO: document
+********************************]]
 function hideMe()
   self.setInvisibleTo(GD.hide_from_players)
 end
 
+--[[ *****************************
+--TODO: document
+********************************]]
 function showMe()
   self.setInvisibleTo({})
 end
 
+--[[ *****************************
+--TODO: document
+********************************]]
 function flipMe()
-  if self.is_face_down then
-    self.UI.setAttribute("player_btn_panel","active",true)
+  if GD.state.flipped then
     GD.state.flipped = false
   else
     self.UI.setAttribute("player_btn_panel","active",false)
@@ -171,16 +278,20 @@ function flipMe()
   end
   self.setLock(false)
   self.flip()
-  Wait.condition(function() self.setLock(true) end, function() return self.resting end, 3)
+  Wait.condition(function()
+    self.setLock(true)
+    if not(GD.state.flipped) then
+      self.UI.setAttribute("player_btn_panel","active",true)
+    end
+  end, function() return self.resting end, 3)
 end
 
-
-
-
+--[[ *****************************
+--TODO: document
+********************************]]
 function dumpData(params)
   log("State data for "..self.getGUID()..": "..GD.color)
   log(GD)
 end
-
 
 require("tts-lib/utils")

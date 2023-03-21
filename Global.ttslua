@@ -1,26 +1,419 @@
 -- #include tts-maharaja/Global
+--[[///////////////////////////////////////////////////////////////////////////////////////////////
 
+	Maharaja
+		TODO: credits
 
+  --TODO:
+    - lots of stuff
+
+///////////////////////////////////////////////////////////////////////////////////////////////////]]
+
+env = {}
+env.test = {}
+env.test.trace = true
+env.test.debug = true
+env.test.in_dev = true
+env.test.force_fresh_save = true
+-- env.test.players = {"Yellow","Red","Green","Blue","Purple",}
+-- env.test.players = {"Yellow","Red","Blue","Purple",}
+-- env.test.players = {"Yellow","Purple",}
+env.test.players = {"Red","Green","Purple",}
+
+GD = {}
+
+--[[ *****************************
+TTS Game Load
+********************************]]
 function onLoad(save_state)
-	log("onLoad() .. Using project global file!")
+	if env.test.trace then log("onLoad()") end
+	if env.test.force_fresh_save then saved_data = "" end
+	if not(env.test.in_dev) then
+		getObjectFromGUID(C.palace_object_guid).setInvisibleTo(Color.list)
+		getObjectFromGUID(C.house_object_guid).setInvisibleTo(Color.list)
+		for _,g in pairs(C.action_dials) do
+			getObjectFromGUID(g).setInvisibleTo(Color.list)
+		end
+	end
+	if (saved_data ~= "") then
+    log("onLoad(): load with saved data")
+    local restore_data = JSON.decode(saved_data)
+    GD = restore_data
+    restoreGameState()
+  else
+		log("onLoad(): load with fresh state")
+		GD.state = {}
+		GD.state.global_UI = {}
+		GD.state.board_UI = {}
+		GD.game = {}
+	end
 end
 
+--[[ *****************************
+Save game state
+********************************]]
 function onSave()
+	local saved_data = JSON.encode(GD)
+  if env.test.force_fresh_save then
+    saved_data = ""
+  end
+  return saved_data
 end
 
+--[[ *****************************
+Restore the game state.
+********************************]]
+function restoreGameState()
+	if env.test.trace then log("restoreGameState()") end
+	log("TODO: restoreGameState()")
+end
+
+--[[ ******************************
+Wrapper function for global UI attributes.
+Saves attribute update to be replayed on restore.
+*********************************]]
+function UI_setAttribute(id, field, value)
+  if env.test.trace2 then log("UI_setAttribute()") end
+  assert(type(id) == "string", "UI_setAttribute(): id must be a string")
+  assert(type(field) == "string", "UI_setAttribute(): field must be a string")
+  assert(value or value==false, "UI_setAttribute(): value missing")
+  GD.states.global_UI[id.."|"..field] = value
+  UI.setAttribute(id, field, value)
+end
+
+--[[ ******************************
+Wrapper function for saving board UI attributes.
+Saves attribute update to be replayed on restore.
+*********************************]]
+function board_UI_setAttribute(id, field, value)
+	if env.test.trace2 then log("board_UI_setAttribute()") end
+	assert(type(id) == "string", "board_UI_setAttribute(): id must be a string")
+	assert(type(field) == "string", "board_UI_setAttribute(): field must be a string")
+	assert(value or value==false, "board_UI_setAttribute(): value missing")
+	GD.states.board_UI[id.."|"..field] = value
+	return getObjectFromGUID(C.board_guid).UI.setAttribute(id, field, value)
+end
+
+--[[ *****************************
+Setup: A player clicked start game.
+********************************]]
+function startGame(player, btn, id)
+	if env.test.trace then log("startGame()") end
+
+	setupNetwork()
+	if not(setupPlayers()) then
+		--TODO: anything?
+		return
+	end
+
+	--TODO: more game start stuff
+
+end
+
+--[[ *****************************
+Setup: initialize network data
+********************************]]
+function setupNetwork()
+	if env.test.trace then log("setupNetwork()") end
+	GD.network = simpleDeepCopy(NETWORK)
+	for i,node in ipairs(GD.network) do
+		if node.type == "city" then
+			node.center = CENTERS[i]
+			node.houses = {}
+			for _,pcol in pairs(C.table_colors) do
+				node.houses[pcol] = {}
+			end
+			node.palaces = {}
+			node.architects = {}
+		elseif node.type == "village" then
+			node.house_1 = {pcol="",guid=""}
+			node.house_2 = {pcol="",guid=""}
+		end
+	end
+end
+
+--[[ *****************************
+Setup: initialize game for seated players
+********************************]]
+function setupPlayers()
+	if env.test.trace then log("setupPlayers()") end
+
+	local seated = getSeatedPlayers()
+	if env.test.players ~= nil then
+		seated = simpleDeepCopy(env.test.players)
+	end
+	GD.game.player_count = #seated
+	if GD.game.player_count < 2 then
+		broadcastToAll("2 or more players needed")
+		return false
+	end
+	GD.game.player_order = {}
+	for _,pcol in ipairs(C.table_colors) do
+		if contains(seated,pcol) then table.insert(GD.game.player_order,pcol) end
+	end
+	GD.game.players = {}
+	for _,pcol in ipairs(GD.game.player_order) do
+		GD.game.players[pcol] = {
+
+			--TODO: init player data structure
+
+		}
+		local dial = getObjectFromGUID(C.action_dials[pcol])
+		dial.call("disableDialButtons")
+		dial.call("showMe")
+	end
+	-- for _,pcol in ipairs(GD.game.player_order) do
+	-- 	fillPlayerBoard(pcol)
+	-- end
+	startLuaCoroutine(Global, "coroFillPlayerBoards")
+	-- --remove unused player area objects
+	-- local board = getObjectFromGUID(C.board_guid)
+	-- local rot = board.getRotation()
+	-- local palace = getObjectFromGUID(C.palace_object_guid)
+	-- assert(palace, "ERROR: setupPlayers(): no palace object")
+	-- copy({palace})
+	-- for _,pcol in ipairs(C.table_colors) do
+	-- 	if GD.game.players[pcol] == nil then
+	-- 		getObjectFromGUID(C.player_boards[pcol]).destruct()
+	-- 		getObjectFromGUID(C.action_dials[pcol]).destruct()
+	-- 		getObjectFromGUID(C.player_aids[pcol]).destruct()
+	-- 		getObjectFromGUID(C.player_pawns[pcol]).destruct()
+	-- 		--place unused player palaces in outer city palaces
+	-- 		for name,city in pairs(C.cities) do
+	-- 			local index = #GD.network[city.node].palaces + 1
+	-- 			local pos = GD.network[city.node].center - C.city_palace_offsets[index]
+	-- 			local p = {position=board.positionToWorld(pos)}
+	-- 			local obj = paste(p)[1]
+	-- 			assert(obj, "ERROR: setupPlayers(): failed to paste object")
+	-- 			obj.setRotation(rot)
+	-- 			obj.setColorTint(C.object_color_tints[pcol])
+	-- 			table.insert(GD.network[city.node].palaces, {g=obj.getGUID(), c=pcol})
+	-- 		end
+	-- 	end
+	-- end
+	return true
+end
+
+--[[ *****************************
+Setup: fill a player board with palaces and houses
+********************************]]
+-- function fillPlayerBoard(pcol)
+-- 	assert(pcol, "ERROR: fillPlayerBoard(): missing player color")
+-- 	if env.test.trace then log("fillPlayerBoard(): "..tostring(pcol)) end
+-- 	local board = getObjectFromGUID(C.player_boards[pcol])
+-- 	assert(board, "ERROR: fillPlayerBoard(): no board object")
+-- 	local rot = board.getRotation()
+-- 	local house = getObjectFromGUID(C.house_object_guid)
+-- 	assert(house, "ERROR: fillPlayerBoard(): no house object")
+-- 	local palace = getObjectFromGUID(C.palace_object_guid)
+-- 	assert(palace, "ERROR: fillPlayerBoard(): no palace object")
+-- 	copy({palace})
+-- 	for i,loc in ipairs(C.player_board_palace_locations) do
+-- 		local p = {position=board.positionToWorld(Vector(loc))}
+-- 		local obj_list = paste(p)
+-- 		obj_list[1].setRotation(rot)
+-- 		log("TODO: save palace guid "..obj_list[1].getGUID().." in player "..pcol.." data")
+-- 		obj_list[1].setColorTint(C.object_color_tints[pcol])
+-- 	end
+-- 	copy({house})
+-- 	for i,loc in ipairs(C.player_board_quarry_locations) do
+-- 		local p = {position=board.positionToWorld(Vector(loc))}
+-- 		local obj_list = paste(p)
+-- 		obj_list[1].setRotation(rot)
+-- 		log("TODO: save quarry house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
+-- 		obj_list[1].setColorTint(C.object_color_tints[pcol])
+-- 	end
+-- 	for i=5,8 do
+-- 		local loc = C.player_board_pool_locations[i]
+-- 		local p = {position=board.positionToWorld(Vector(loc))}
+-- 		local obj_list = paste(p)
+-- 		obj_list[1].setRotation(rot)
+-- 		log("TODO: save pool house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
+-- 		obj_list[1].setColorTint(C.object_color_tints[pcol])
+-- 	end
+-- end
+
+--[[ *****************************
+Setup: fill a player board with palaces and houses
+********************************]]
+function coroFillPlayerBoards()
+	if env.test.trace then log("coroFillPlayerBoards(): START") end
+	local delay = 2
+	local pauseMe = function()
+		local count = 0
+		while count < delay do
+			count = count + 1
+			coroutine.yield(0)
+		end
+	end
+	local house = getObjectFromGUID(C.house_object_guid)
+	assert(house, "ERROR: coroFillPlayerBoards(): no house object")
+	local palace = getObjectFromGUID(C.palace_object_guid)
+	assert(palace, "ERROR: coroFillPlayerBoards(): no palace object")
+	for _,pcol in ipairs(GD.game.player_order) do
+		local player_board = getObjectFromGUID(C.player_boards[pcol])
+		assert(player_board, "ERROR: coroFillPlayerBoards(): no board object")
+		local rot = player_board.getRotation()
+		copy({palace})
+		for i,loc in ipairs(C.player_board_palace_locations) do
+			local p = {position=player_board.positionToWorld(Vector(loc))}
+			local obj_list = paste(p)
+			obj_list[1].setRotation(rot)
+			-- log("TODO: save palace guid "..obj_list[1].getGUID().." in player "..pcol.." data")
+			obj_list[1].setColorTint(C.object_color_tints[pcol])
+			pauseMe()
+		end
+		copy({house})
+		for i,loc in ipairs(C.player_board_quarry_locations) do
+			local p = {position=player_board.positionToWorld(Vector(loc))}
+			local obj_list = paste(p)
+			obj_list[1].setRotation(rot)
+			-- log("TODO: save quarry house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
+			obj_list[1].setColorTint(C.object_color_tints[pcol])
+			pauseMe()
+		end
+		for i=5,8 do
+			local loc = C.player_board_pool_locations[i]
+			local p = {position=player_board.positionToWorld(Vector(loc))}
+			local obj_list = paste(p)
+			obj_list[1].setRotation(rot)
+			-- log("TODO: save pool house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
+			obj_list[1].setColorTint(C.object_color_tints[pcol])
+			pauseMe()
+		end
+	end
+	--remove unused player area objects
+	local board = getObjectFromGUID(C.board_guid)
+	local rot = board.getRotation()
+	copy({palace})
+	for _,pcol in ipairs(C.table_colors) do
+		if GD.game.players[pcol] == nil then
+			getObjectFromGUID(C.player_boards[pcol]).destruct()
+			getObjectFromGUID(C.action_dials[pcol]).destruct()
+			getObjectFromGUID(C.player_aids[pcol]).destruct()
+			getObjectFromGUID(C.player_pawns[pcol]).destruct()
+			--place unused player palaces in outer city palaces
+			for name,city in pairs(C.cities) do
+				local index = #GD.network[city.node].palaces + 1
+				local pos = GD.network[city.node].center - C.city_palace_offsets[index]
+				local p = {position=board.positionToWorld(pos)}
+				local obj = paste(p)[1]
+				assert(obj, "ERROR: coroFillPlayerBoards(): failed to paste object")
+				obj.setRotation(rot)
+				obj.setColorTint(C.object_color_tints[pcol])
+				table.insert(GD.network[city.node].palaces, {g=obj.getGUID(), c=pcol})
+				pauseMe()
+			end
+		end
+	end
+	if env.test.trace then log("coroFillPlayerBoards(): EXIT") end
+	return 1
+end
+
+--[[///////////////////////////////////////////////////////////]]
+--[[/////////////// DEVELOPMENTAL STUFF ///////////////////////]]
+--[[///////////////////////////////////////////////////////////]]
+
+function startCoro()
+	startLuaCoroutine(Global, "testCoro")
+end
+
+function testCoro()
+	log("testCoro() started")
+	local delay = 50
+	local pauseMe = function()
+		local count = 0
+		while count < delay do
+			count = count + 1
+			coroutine.yield(0)
+		end
+	end
+	for i=1,5 do
+		log("Iteration "..tostring(i))
+		pauseMe()
+	end
+	log("testCoro() ending")
+	return 1
+end
+
+
+function testCityHouses(pcol, city_name)
+	log("put selected houses in "..city_name)
+	local stuff = Player[pcol].getSelectedObjects()
+	log(#stuff.." selected objects to process")
+	local board = getObjectFromGUID(C.board_guid)
+	local center = C.city_centers[city_name]
+	log(city_name.." center is "..tostring(center))
+	local color_indexes = {Yellow = 0,Red = 0,Green = 0,Blue = 0,Purple = 0,}
+	for _,o in ipairs(stuff) do
+		local color = o.getName()
+		color_indexes[color] = color_indexes[color] + 1
+		local offset = Vector(C.city_house_offsets[color][color_indexes[color]].o)
+		log("placing "..color.." object "..o.getGUID().." with offset "..tostring(color_indexes[color])..": "..tostring(offset))
+		local pos = center - offset
+		local rot = Vector(C.city_house_offsets[color][color_indexes[color]].r)
+		o.setRotationSmooth(rot, false, true)
+		o.setPositionSmooth(board.positionToWorld(pos), false, true)
+	end
+end
+
+function testCityPalaces(pcol, city_name)
+	log("put selected houses in "..city_name)
+	local stuff = Player[pcol].getSelectedObjects()
+	log(#stuff.." selected objects to process")
+	if #stuff > 7 then
+		log("Only 7 palaces max allowed in a city")
+		return
+	end
+	local board = getObjectFromGUID(C.board_guid)
+	local center = C.city_centers[city_name]
+	log(center)
+	for index,o in ipairs(stuff) do
+		local offset = Vector(0,0,0)
+		if index < 7 then offset = C.city_palace_offsets[index] end
+		log("putting object "..o.getGUID().." in loc "..tostring(index)..", at offset "..tostring(offset))
+		local pos = center - offset
+		local rot = board.getRotation()
+		o.setRotationSmooth(rot, false, true)
+		o.setPositionSmooth(board.positionToWorld(pos), false, true)
+	end
+end
+
+function testCityPawns(pcol, city_name)
+	log("put selected pawns in "..city_name)
+	local stuff = Player[pcol].getSelectedObjects()
+	log(#stuff.." selected objects to process")
+	if #stuff > 5 then
+		log("Only 5 pawns max allowed in a city")
+		return
+	end
+	local board = getObjectFromGUID(C.board_guid)
+	local center = C.city_centers[city_name]
+	log(center)
+	for index,o in ipairs(stuff) do
+		local offset = Vector(C.city_pawn_offsets[index])
+		log("putting object "..o.getGUID().." in loc "..tostring(index)..", at offset "..tostring(offset))
+		local pos = center - offset
+		local rot = Vector(0,90,0)
+		o.setRotationSmooth(rot, false, true)
+		o.setPositionSmooth(board.positionToWorld(pos), false, true)
+	end
+end
 
 function getLTB(pcol)
   log("Getting positions of selected objects relative to board")
   local stuff = Player[pcol].getSelectedObjects()
   log(#stuff.." selected objects to process")
-  local board = getObjectFromGUID(C.board_guid)
+	--local board = getObjectFromGUID(C.board_guid)
+	local board = getObjectFromGUID(C.board_guid)
   local s = ""
   for i,o in ipairs(stuff) do
     log("Processing object #"..tostring(i)..": "..o.getGUID())
     local p = board.positionToLocal(o.getPosition())
-    local r = o.getRotation()
+    -- local r = Vector(0,180,0)
 		-- City house positions
-    local t = '{p={'..p.x..','..p.y..','..p.z..'},{r='..r.x..','..r.y..','..r.z..'}},'
+		-- local t = '{g="'..o.getGUID()..'",p={'..p.x..','..p.y..','..p.z..'},r={'..r.x..','..r.y..','..r.z..'}},'
+		local t = '{g="'..o.getGUID()..'",p={'..p.x..','..p.y..','..p.z..'},r={0,180,0}},'
     log(t)
     s = s .. t .. '\n'
   end
@@ -29,11 +422,47 @@ function getLTB(pcol)
   end
 end
 
-test = {
-  {p={0.624050140380859,0.215901017189026,0.26046359539032},{r=1.60509043780621E-05,179.994125366211,6.86197324739624E-07}},
-  {p={0.585041046142578,0.21589982509613,0.260502010583878},{r=5.57859857508447E-05,179.991256713867,1.05628384972078E-06}},
-  {p={0.546089947223663,0.215901136398315,0.260495036840439},{r=5.62009590794332E-05,179.994216918945,7.64223727856006E-07}},
-}
+function getLTPB(pcol)
+	log("Getting positions of selected objects relative to player board")
+  local stuff = Player[pcol].getSelectedObjects()
+  log(#stuff.." selected objects to process")
+	local board = getObjectFromGUID(C.player_boards[pcol].g)
+  local s = ""
+  for i,o in ipairs(stuff) do
+    log("Processing object #"..tostring(i)..": "..o.getGUID())
+    local p = board.positionToLocal(o.getPosition())
+		local r = board.getRotation()
+		local t = '{g="'..o.getGUID()..'",p={'..p.x..','..p.y..','..p.z..'},},'
+    log(t)
+    s = s .. t .. '\n'
+  end
+  if s ~= "" then
+    Notes.setNotes(s)
+  end
 
-require("tts-maharaja/Constants")
+end
+
+function getOffsets()
+	local board = getObjectFromGUID(C.board_guid)
+	local center = C.city_centers.Agra
+	center.y = 0
+	log(center)
+	local s = ""
+	for i,loc in ipairs(C.ltb) do
+		local pos = Vector(loc.p)
+		pos.y = 0
+		local o = center - pos
+		-- local r = Vector(loc.r)
+		-- local t = '{o={'..o.x..','..o.y..','..o.z..'},r={'..r.x..','..r.y..','..r.z..'}},'
+		local t = '{o={'..o.x..','..o.y..','..o.z..'},r={0,180,0}}'
+		log(t)
+		s = s .. t .. '\n'
+	end
+	if s ~= "" then
+		Notes.setNotes(s)
+	end
+end
+
 require("tts-lib/utils")
+require("tts-maharaja/Constants")
+require("tts-maharaja/Network")

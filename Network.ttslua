@@ -40,47 +40,50 @@ NETWORK = {
   { id = 37, type = "village", name = "", neighbors = {36,35}, },
   { id = 38, type = "start", name = "Start_City", neighbors = {32,26,19,27,33}, },
 }
-
+--local to main board
 CENTERS = {
-  Vector(1.104712, 0.65481, -0.716512),
-  Vector(),
-  Vector(),
-  Vector(0.056405, 0.654815, -0.713191),
-  Vector(),
-  Vector(),
-  Vector(-0.990048, 0.654813, -0.711886),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(0.59811, 0.654809, -0.008773),
-  Vector(),
-  Vector(-0.480402, 0.654809, -0.002455),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(1.101427, 0.654813, 0.6985),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(),
-  Vector(-0.986415, 0.65481, 0.702058),
-  Vector(),
-  Vector(),
-  Vector(),
+  Vector(1.104712, 0, -0.716512), --Bikaner
+  Vector( 0.754757, 0, -0.82053 ),
+  Vector( 0.445765, 0, -0.748445 ),
+  Vector(0.056405, 0, -0.713191),  --Jaipur
+  Vector( -0.316683, 0, -0.801473 ),
+  Vector( -0.647095, 0, -0.743253 ),
+  Vector(-0.990048, 0, -0.711886), --Delih
+  Vector( 0.897177, 0, -0.358756 ),
+  Vector( 0.838471, 0, -0.22045 ),
+  Vector( 0.470692, 0, -0.302344 ),
+  Vector( 0.27497, 0, -0.364703 ),
+  Vector( -0.000836, 0, -0.256932 ),
+  Vector( -0.328882, 0, -0.494261 ),
+  Vector( -0.49344, 0, -0.323494 ),
+  Vector( -0.708808, 0, -0.237768 ),
+  Vector( -0.849568, 0, -0.31238 ),
+  Vector( 1.226589, 0, 0.12572 ),
+  Vector(0.59811, 0, -0.008773), --Jodupur
+  Vector( 0.136172, 0, 0.129692 ),
+  Vector(-0.480402, 0, -0.002455), --Agra
+  Vector( -1.098701, 0, -0.046199 ),
+  Vector( 0.874532, 0, 0.273328 ),
+  Vector( -0.798624, 0, 0.249924 ),
+  Vector( 0.932673, 0, 0.434251 ),
+  Vector( 0.405808, 0, 0.390339 ),
+  Vector( 0.225313, 0, 0.452191 ),
+  Vector( -0.087981, 0, 0.463903 ),
+  Vector( -0.236092, 0, 0.354412 ),
+  Vector( -0.920808, 0, 0.375404 ),
+  Vector(1.101427, 0, 0.6985), --Ahaadabad
+  Vector( 0.743516, 0, 0.634085 ),
+  Vector( 0.401486, 0, 0.725351 ),
+  Vector( -0.287542, 0, 0.64538 ),
+  Vector( -0.600226, 0, 0.645465 ),
+  Vector(-0.986415, 0, 0.702058), --Khajuraho
+  Vector( 0.524526, 0, 0.903381 ),
+  Vector( -0.406184, 0, 0.891396 ),
+  Vector( 0.056428, 0, 0.667273 ), --Start City
 }
+
+VILLAGE_OFFSET = Vector(0.0225, 0, 0)
+
 --[[
 Bikaner = Vector(1.104712, 0.65481, -0.716512),
 Jaipur = Vector(0.056405, 0.654815, -0.713191),

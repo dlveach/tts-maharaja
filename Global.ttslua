@@ -13,12 +13,19 @@ env = {}
 env.test = {}
 env.test.trace = true
 env.test.debug = true
-env.test.in_dev = true
+env.test.in_dev = false
 env.test.force_fresh_save = true
--- env.test.players = {"Yellow","Red","Green","Blue","Purple",}
+env.test.save_positions = true
+env.test.auto_switch = true
+-- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
-env.test.players = {"Red","Green","Purple",}
+-- env.test.players = {"Green","Red",}
+env.test.players = {"Green","Red","Blue"}
+-- env.test.players = {"Red","Green","Purple",}
+
+env.game = {}
+env.game.fill_delay = 2
 
 GD = {}
 
@@ -29,6 +36,7 @@ function onLoad(save_state)
 	if env.test.trace then log("onLoad()") end
 	if env.test.force_fresh_save then saved_data = "" end
 	if not(env.test.in_dev) then
+		getObjectFromGUID(C.board_guid).interactable = false
 		getObjectFromGUID(C.palace_object_guid).setInvisibleTo(Color.list)
 		getObjectFromGUID(C.house_object_guid).setInvisibleTo(Color.list)
 		for _,g in pairs(C.action_dials) do
@@ -46,6 +54,9 @@ function onLoad(save_state)
 		GD.state.global_UI = {}
 		GD.state.board_UI = {}
 		GD.game = {}
+		for _,g in pairs(C.player_pawns) do
+			getObjectFromGUID(g).setLock(true)
+		end
 	end
 end
 
@@ -62,6 +73,7 @@ end
 
 --[[ *****************************
 Restore the game state.
+TODO: implement
 ********************************]]
 function restoreGameState()
 	if env.test.trace then log("restoreGameState()") end
@@ -71,6 +83,7 @@ end
 --[[ ******************************
 Wrapper function for global UI attributes.
 Saves attribute update to be replayed on restore.
+TODO: convert calls to use
 *********************************]]
 function UI_setAttribute(id, field, value)
   if env.test.trace2 then log("UI_setAttribute()") end
@@ -84,6 +97,7 @@ end
 --[[ ******************************
 Wrapper function for saving board UI attributes.
 Saves attribute update to be replayed on restore.
+TODO: convert calls to use
 *********************************]]
 function board_UI_setAttribute(id, field, value)
 	if env.test.trace2 then log("board_UI_setAttribute()") end
@@ -96,18 +110,26 @@ end
 
 --[[ *****************************
 Setup: A player clicked start game.
+TODO: implement UI
 ********************************]]
-function startGame(player, btn, id)
-	if env.test.trace then log("startGame()") end
+function startGameBtn(player, btn, id)
+	if env.test.trace then log("startGameBtn()") end
+	startGame()
+end
 
+--[[ *****************************
+Setup: initialize the game
+********************************]]
+function startGame()
+	if env.test.trace then log("startGame()") end
+	GD.game.stage = "setup"
+	GD.game.auction_characters = false --TODO: get this from start dialog
 	setupNetwork()
 	if not(setupPlayers()) then
 		--TODO: anything?
 		return
 	end
-
-	--TODO: more game start stuff
-
+	--TODO: more game start stuff???
 end
 
 --[[ *****************************
@@ -117,8 +139,8 @@ function setupNetwork()
 	if env.test.trace then log("setupNetwork()") end
 	GD.network = simpleDeepCopy(NETWORK)
 	for i,node in ipairs(GD.network) do
+		node.center = CENTERS[i]
 		if node.type == "city" then
-			node.center = CENTERS[i]
 			node.houses = {}
 			for _,pcol in pairs(C.table_colors) do
 				node.houses[pcol] = {}
@@ -126,8 +148,7 @@ function setupNetwork()
 			node.palaces = {}
 			node.architects = {}
 		elseif node.type == "village" then
-			node.house_1 = {pcol="",guid=""}
-			node.house_2 = {pcol="",guid=""}
+			node.houses = {}
 		end
 	end
 end
@@ -153,95 +174,34 @@ function setupPlayers()
 	end
 	GD.game.players = {}
 	for _,pcol in ipairs(GD.game.player_order) do
-		GD.game.players[pcol] = {
-
-			--TODO: init player data structure
-
-		}
-		local dial = getObjectFromGUID(C.action_dials[pcol])
-		dial.call("disableDialButtons")
-		dial.call("showMe")
+		GD.game.players[pcol] = simpleDeepCopy(C.player_data)
+		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
+		--initialize player pool
+		local player_board = getObjectFromGUID(C.player_boards[pcol])
+		for i=1,12 do
+			local pos = player_board.positionToWorld(C.player_board_pool_locations[i])
+			table.insert(GD.game.players[pcol].pool, i, {g=nil,p=pos})
+		end
 	end
-	-- for _,pcol in ipairs(GD.game.player_order) do
-	-- 	fillPlayerBoard(pcol)
-	-- end
+	GD.game.current_player = math.random(#GD.game.player_order)
+	GD.game.current_player_color = GD.game.player_order[GD.game.current_player]
+	broadcastToAll("Starting player will be "..GD.game.current_player_color)
 	startLuaCoroutine(Global, "coroFillPlayerBoards")
-	-- --remove unused player area objects
-	-- local board = getObjectFromGUID(C.board_guid)
-	-- local rot = board.getRotation()
-	-- local palace = getObjectFromGUID(C.palace_object_guid)
-	-- assert(palace, "ERROR: setupPlayers(): no palace object")
-	-- copy({palace})
-	-- for _,pcol in ipairs(C.table_colors) do
-	-- 	if GD.game.players[pcol] == nil then
-	-- 		getObjectFromGUID(C.player_boards[pcol]).destruct()
-	-- 		getObjectFromGUID(C.action_dials[pcol]).destruct()
-	-- 		getObjectFromGUID(C.player_aids[pcol]).destruct()
-	-- 		getObjectFromGUID(C.player_pawns[pcol]).destruct()
-	-- 		--place unused player palaces in outer city palaces
-	-- 		for name,city in pairs(C.cities) do
-	-- 			local index = #GD.network[city.node].palaces + 1
-	-- 			local pos = GD.network[city.node].center - C.city_palace_offsets[index]
-	-- 			local p = {position=board.positionToWorld(pos)}
-	-- 			local obj = paste(p)[1]
-	-- 			assert(obj, "ERROR: setupPlayers(): failed to paste object")
-	-- 			obj.setRotation(rot)
-	-- 			obj.setColorTint(C.object_color_tints[pcol])
-	-- 			table.insert(GD.network[city.node].palaces, {g=obj.getGUID(), c=pcol})
-	-- 		end
-	-- 	end
-	-- end
 	return true
 end
 
 --[[ *****************************
-Setup: fill a player board with palaces and houses
-********************************]]
--- function fillPlayerBoard(pcol)
--- 	assert(pcol, "ERROR: fillPlayerBoard(): missing player color")
--- 	if env.test.trace then log("fillPlayerBoard(): "..tostring(pcol)) end
--- 	local board = getObjectFromGUID(C.player_boards[pcol])
--- 	assert(board, "ERROR: fillPlayerBoard(): no board object")
--- 	local rot = board.getRotation()
--- 	local house = getObjectFromGUID(C.house_object_guid)
--- 	assert(house, "ERROR: fillPlayerBoard(): no house object")
--- 	local palace = getObjectFromGUID(C.palace_object_guid)
--- 	assert(palace, "ERROR: fillPlayerBoard(): no palace object")
--- 	copy({palace})
--- 	for i,loc in ipairs(C.player_board_palace_locations) do
--- 		local p = {position=board.positionToWorld(Vector(loc))}
--- 		local obj_list = paste(p)
--- 		obj_list[1].setRotation(rot)
--- 		log("TODO: save palace guid "..obj_list[1].getGUID().." in player "..pcol.." data")
--- 		obj_list[1].setColorTint(C.object_color_tints[pcol])
--- 	end
--- 	copy({house})
--- 	for i,loc in ipairs(C.player_board_quarry_locations) do
--- 		local p = {position=board.positionToWorld(Vector(loc))}
--- 		local obj_list = paste(p)
--- 		obj_list[1].setRotation(rot)
--- 		log("TODO: save quarry house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
--- 		obj_list[1].setColorTint(C.object_color_tints[pcol])
--- 	end
--- 	for i=5,8 do
--- 		local loc = C.player_board_pool_locations[i]
--- 		local p = {position=board.positionToWorld(Vector(loc))}
--- 		local obj_list = paste(p)
--- 		obj_list[1].setRotation(rot)
--- 		log("TODO: save pool house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
--- 		obj_list[1].setColorTint(C.object_color_tints[pcol])
--- 	end
--- end
-
---[[ *****************************
-Setup: fill a player board with palaces and houses
+Setup: fill player boards with palaces and houses,
+remove unused player objects and place unused palaces
+Run as a coro with pauses between spawning objects.
 ********************************]]
 function coroFillPlayerBoards()
 	if env.test.trace then log("coroFillPlayerBoards(): START") end
-	local delay = 2
-	local pauseMe = function()
+	--private function to pause (yield) coro for a number of frames
+	local pauseMe = function(frames)
+		frames = frames or env.game.fill_delay
 		local count = 0
-		while count < delay do
+		while count < frames do
 			count = count + 1
 			coroutine.yield(0)
 		end
@@ -250,38 +210,7 @@ function coroFillPlayerBoards()
 	assert(house, "ERROR: coroFillPlayerBoards(): no house object")
 	local palace = getObjectFromGUID(C.palace_object_guid)
 	assert(palace, "ERROR: coroFillPlayerBoards(): no palace object")
-	for _,pcol in ipairs(GD.game.player_order) do
-		local player_board = getObjectFromGUID(C.player_boards[pcol])
-		assert(player_board, "ERROR: coroFillPlayerBoards(): no board object")
-		local rot = player_board.getRotation()
-		copy({palace})
-		for i,loc in ipairs(C.player_board_palace_locations) do
-			local p = {position=player_board.positionToWorld(Vector(loc))}
-			local obj_list = paste(p)
-			obj_list[1].setRotation(rot)
-			-- log("TODO: save palace guid "..obj_list[1].getGUID().." in player "..pcol.." data")
-			obj_list[1].setColorTint(C.object_color_tints[pcol])
-			pauseMe()
-		end
-		copy({house})
-		for i,loc in ipairs(C.player_board_quarry_locations) do
-			local p = {position=player_board.positionToWorld(Vector(loc))}
-			local obj_list = paste(p)
-			obj_list[1].setRotation(rot)
-			-- log("TODO: save quarry house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
-			obj_list[1].setColorTint(C.object_color_tints[pcol])
-			pauseMe()
-		end
-		for i=5,8 do
-			local loc = C.player_board_pool_locations[i]
-			local p = {position=player_board.positionToWorld(Vector(loc))}
-			local obj_list = paste(p)
-			obj_list[1].setRotation(rot)
-			-- log("TODO: save pool house guid "..obj_list[1].getGUID().." in player "..pcol.." data")
-			obj_list[1].setColorTint(C.object_color_tints[pcol])
-			pauseMe()
-		end
-	end
+
 	--remove unused player area objects
 	local board = getObjectFromGUID(C.board_guid)
 	local rot = board.getRotation()
@@ -295,19 +224,556 @@ function coroFillPlayerBoards()
 			--place unused player palaces in outer city palaces
 			for name,city in pairs(C.cities) do
 				local index = #GD.network[city.node].palaces + 1
-				local pos = GD.network[city.node].center - C.city_palace_offsets[index]
-				local p = {position=board.positionToWorld(pos)}
+				local pos = board.positionToWorld(GD.network[city.node].center - C.city_palace_offsets[index])
+				local p = {position=pos}
 				local obj = paste(p)[1]
 				assert(obj, "ERROR: coroFillPlayerBoards(): failed to paste object")
 				obj.setRotation(rot)
 				obj.setColorTint(C.object_color_tints[pcol])
-				table.insert(GD.network[city.node].palaces, {g=obj.getGUID(), c=pcol})
+				obj.setName("Unused")
+				obj.memo = "palace"
+				table.insert(GD.network[city.node].palaces, {g=obj.getGUID(), c=pcol, p=pos})
 				pauseMe()
+				Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 			end
 		end
 	end
+	pauseMe(10)
+	--fill seated player boards
+	for _,pcol in ipairs(GD.game.player_order) do
+		local player = GD.game.players[pcol]
+		local player_board = getObjectFromGUID(C.player_boards[pcol])
+		assert(player_board, "ERROR: coroFillPlayerBoards(): no board object")
+		local rot = player_board.getRotation()
+		copy({palace})
+		for i,loc in ipairs(C.player_board_palace_locations) do
+			local pos = player_board.positionToWorld(loc)
+			local p = {position=pos}
+			local obj = paste(p)[1]
+			obj.setRotation(rot)
+			obj.setColorTint(C.object_color_tints[pcol])
+			obj.setName(pcol)
+			obj.memo = "palace"
+			table.insert(player.palaces, {g=obj.getGUID(),p=pos})
+			pauseMe()
+			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		end
+		copy({house})
+		for i,loc in ipairs(C.player_board_quarry_locations) do
+			local pos = player_board.positionToWorld(loc)
+			local p = {position=pos}
+			local obj = paste(p)[1]
+			obj.setRotation(rot)
+			obj.setColorTint(C.object_color_tints[pcol])
+			obj.setName(pcol)
+			obj.memo = "house"
+			table.insert(player.quarry, {g=obj.getGUID(),p=pos})
+			pauseMe()
+			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		end
+		for i=5,8 do
+			-- local pos = player_board.positionToWorld(C.player_board_pool_locations[i])
+			-- local p = {position=pos}
+			local p = {position=player.pool[i].p}
+			local obj = paste(p)[1]
+			obj.setRotation(rot)
+			obj.setColorTint(C.object_color_tints[pcol])
+			obj.setName(pcol)
+			obj.memo = "house"
+			player.pool[i].g = obj.getGUID()
+			pauseMe()
+			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		end
+		local dial = getObjectFromGUID(C.action_dials[pcol])
+		dial.call("disableDialButtons")
+		dial.call("showMe")
+	end
+
+	--setup for next game stage
+	if GD.game.auction_characters then
+
+		--TODO: setup for auction
+
+	else
+		--setup for character card selection
+		for _,char in ipairs(C.characters) do
+			getObjectFromGUID(char.g).setLock(false)
+		end
+		GD.game.stage = "select_starting_characters"
+		GD.game.characters_selected = 0
+		broadcastToAll(GD.game.current_player_color.." player select a character card then continue clockwise around table")
+	end
 	if env.test.trace then log("coroFillPlayerBoards(): EXIT") end
 	return 1
+end
+
+--[[ *****************************
+Set the locked state of a player's houses in the build pool
+********************************]]
+function setPlayerPoolLock(pcol, locked)
+	locked = locked or false
+	for _,e in ipairs(GD.game.players[pcol].pool) do
+		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	end
+end
+
+--[[ *****************************
+Set the locked state of a player's unplaced palaces
+********************************]]
+function setPlayerPalacesLock(pcol, locked)
+	locked = locked or false
+	for _,e in ipairs(GD.game.players[pcol].palaces) do
+		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	end
+end
+
+--[[ *****************************
+Handle dropping things on the main board.
+House and palace drops off board are snapped back.
+TODO: disable DEVELOPMENT stuff
+********************************]]
+function onObjectDrop(pcol, obj)
+	if env.test.trace then log("onObjectDrop(): pcol "..pcol..", obj "..obj.getGUID()) end
+	--TODO: remove DEVELOPMENT stuff
+	if env.test.save_positions then
+		if env.test.localToObject ~= nil then
+			local refObj = getObjectFromGUID(env.test.localToObject)
+			if refObj then
+				Notes.setNotes(tostring(refObj.positionToLocal(obj.getPosition())))
+			end
+		else
+			Notes.setNotes(tostring(obj.getPosition()))
+		end
+	end	--END DEVELOPMENT
+	if not(GD.game.stage) then return end
+	local type = obj.memo
+	if type == "character" then
+		handleCharacterDrop(pcol, obj)
+	elseif type == "palace" or type == "house" then
+		local pos = obj.getPosition()
+		local board = getObjectFromGUID(C.board_guid)
+		local center = board.getBounds()["center"]
+	  local size = board.getBounds()["size"]
+		local snapback = false
+		if pcol ~= GD.game.current_player_color then snapback = true
+		elseif obj.getName() ~= pcol then snapback = true
+	  elseif pos.x > center.x + (size.x/2) then snapback = true
+	  elseif pos.x < center.x - (size.x/2) then snapback = true
+	  elseif pos.z > center.z + (size.z/2) then snapback = true
+	  elseif pos.z < center.z - (size.z/2) then snapback = true
+		end
+		if snapback then
+			--TODO: consider use an array of GD.snaps for placed objects?  Use player board home loc if not in that list?
+			obj.setPosition(getPlayerBoardLocation(obj))
+			obj.setRotation(getObjectFromGUID(C.player_boards[obj.getName()]).getRotation())
+			return
+		end
+		if type == "house" then
+			handleHouseDrop(pcol, obj)
+		else
+			handlePalaceDrop(pcol, obj)
+		end
+	else
+		log("WARN: onObjectDrop() unknown object "..obj.getGUID())
+		return
+	end
+end
+
+--[[ *****************************
+Process a dropped character card.
+Result depends on game stage.
+TODO: handle during player turn
+********************************]]
+function handleCharacterDrop(pcol, obj)
+	if env.test.trace then log("handleCharacterDrop()") end
+	local char_id = getCharacterId(obj.getGUID())
+	local board = getObjectFromGUID(C.board_guid)
+	if pcol ~= GD.game.current_player_color then --ignore non active player
+		obj.setPosition(board.positionToWorld(C.characters[char_id].bank_pos))
+		obj.setRotation(board.getRotation())
+		return
+	end
+	if GD.game.stage == "select_starting_characters" then
+		if GD.game.players[pcol].character_id > 0 then
+			broadcastToColor("Character already selected", pcol)
+			obj.setPosition(board.positionToWorld(C.characters[char_id].bank_pos))
+			obj.setRotation(board.getRotation())
+			return
+		end
+		local player_board = getObjectFromGUID(C.player_boards[pcol])
+		local pos = player_board.positionToWorld(C.player_board_character_location)
+		local rot = player_board.getRotation()
+		obj.setPositionSmooth(pos, false, true)
+		obj.setRotation(rot)
+		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		GD.game.players[pcol].character_id = char_id
+		GD.game.characters_selected = GD.game.characters_selected + 1
+		if GD.game.characters_selected == GD.game.player_count then
+			GD.game.stage = "initial_placement"
+			broadcastToAll("All players selected a character, begin initial placement")
+			for pcol,pdata in pairs(GD.game.players) do
+				for _,e in ipairs(pdata.pool) do
+					if e.g then getObjectFromGUID(e.g).setLock(false) end
+				end
+				GD.game.players[pcol].init_placements = 4
+			end
+			GD.game.players_init_placed = 0
+			GD.game.init_placement = 4
+			log("here's where we update player order")
+			updateTurnOrder()
+			setNextPlayer(FIRST)
+		else
+			log(tostring(GD.game.characters_selected).." of "..tostring(#GD.game.player_order).." players selected a character")
+			setNextPlayer()
+		end
+	elseif GD.game.stage == "player_turn" then
+
+		--TODO: handle this
+
+	end
+end
+
+--[[ *****************************
+--TODO: thinking about this,
+********************************]]
+function isObjectPlaced(guid)
+	return false
+end
+
+--[[ *****************************
+TODO: need this in a fn? Used only once?
+********************************]]
+function isVillageFull(node)
+	if GD.game.player_count == 2 and #node.houses == 1 then return true
+	elseif GD.game.player_count > 2 and #node.houses == 2 then return true end
+	return false
+end
+
+--[[ *****************************
+Process a dropped house.
+Result depends on game stage.
+********************************]]
+function handleHouseDrop(pcol, obj)
+	if env.test.trace then log("handleHouseDrop()") end
+	local board = getObjectFromGUID(C.board_guid)
+	local color = obj.getName()
+	local function snapBack()
+		if isObjectPlaced(obj.getGUID()) then
+
+			log("TODO: Handle placed obj snapback ***")
+			--TODO: use array of GD.snaps for placed objects?
+
+		else
+			obj.setPosition(getPlayerBoardLocation(obj))
+			obj.setRotation(getObjectFromGUID(C.player_boards[color]).getRotation())
+		end
+		return
+	end
+	local pos = obj.getPosition()
+	pos.y = 0
+	local index = closestNode(pos)
+	log("nearest is id "..tostring(index)..", type "..GD.network[index].type..", name "..GD.network[index].name)
+	if index < 1 then
+		snapBack(obj)
+		return
+	end
+	if GD.game.stage == "initial_placement" then
+		local node = GD.network[index]
+		if node.type == "village" then
+			if isVillageFull(node) then
+				snapBack()
+				return
+			end
+			table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
+			removeFromPlayerBoard(obj)
+
+			--TODO: undo stuffs
+
+			--TODO: set position of house relative to node center, remove HACK:
+			local pos_1 = node.center - VILLAGE_OFFSET
+			local pos_2 = node.center + VILLAGE_OFFSET
+			local pos = board.positionToWorld(pos_1)
+			if #node.houses == 1 then pos = board.positionToWorld(pos_2) end
+			pos.y = 1.5
+
+			obj.setRotation(board.getRotation())
+			obj.setPosition(pos)
+			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+			GD.game.players[pcol].init_placements = GD.game.players[pcol].init_placements - 1
+			GD.game.players_init_placed = GD.game.players_init_placed + 1
+			if GD.game.players_init_placed == GD.game.player_count then
+				--reset for next round of placement until all 4 placed
+				GD.game.players_init_placed = 0
+				GD.game.init_placement = GD.game.init_placement - 1
+			end
+			if GD.game.init_placement == 0 then
+				--End of placement, setup for first round of action selection
+				GD.game.stage = "select_actions"
+				for pcol,pdata in pairs(GD.game.players) do
+					--move starting 6 houses from quarry to pool each player
+					local quarry = GD.game.players[pcol].quarry
+					local pool = GD.game.players[pcol].pool
+					for i=1,6 do
+						local index = 16 - i + 1
+						local house = getObjectFromGUID(quarry[index].g)
+						assert(house,"ERROR: handleHouseDrop() nil quarry house during setup for actions")
+						house.setPosition(pool[i].p)
+						quarry[index].g = nil
+						pool[i].g = house.getGUID()
+					end
+					--initialze player dial for action selection
+					local dial = getObjectFromGUID(C.action_dials[pcol])
+					dial.call("enableDialButtons")
+					dial.call("hideMe")
+					dial.call("flipMe")
+					GD.game.players[pcol].has_actions = true --TODO: move this to "confirm" actions?
+				end
+				broadcastToAll("Begin action selection, all players confirm selections")
+				-- setNextPlayer(FIRST)
+				return
+			else
+				setNextPlayer()
+			end
+		elseif node.type == "city" then
+			snapBack()
+			return
+		else
+			snapBack()
+			return
+		end
+		setNextPlayer()
+	else
+
+		log("TODO: handle house drop during play ***")
+
+	end
+end
+
+--[[ *****************************
+Remove an object from player board data.
+********************************]]
+function removeFromPlayerBoard(obj)
+	if env.test.trace then log("removeFromPlayerBoard()") end
+	local player = GD.game.players[obj.getName()]
+	assert(player,"ERROR: removeFromPlayerBoard() could not locate player data")
+	if obj.memo == "palace" then
+		for i,data in ipairs(player.palaces) do
+			if data.g == obj.getGUID() then
+				-- table.remove(player.palaces, i)
+				player.palaces[i].g = nil
+				return
+			end
+		end
+	else
+		for i,data in ipairs(player.pool) do
+			if data.g == obj.getGUID() then
+				-- table.remove(player.pool, i)
+				player.pool[i].g = nil
+				return
+			end
+		end
+	end
+	log("WARN: could not find object "..obj.getGUID().." in "..obj.getName().." data")
+end
+
+--[[ *****************************
+Process a dropped palace.
+********************************]]
+function handlePalaceDrop(pcol, obj)
+	log("TODO: handlePalaceDrop(guid) ****")
+end
+
+--[[ *****************************
+Return the snap back playerboard location for an object.
+Playerboard determined from object name(color))
+********************************]]
+function getPlayerBoardLocation(obj)
+	local color = obj.getName()
+	for _,d in ipairs(GD.game.players[color].pool) do
+		if d.g == obj.getGUID() then return d.p end
+	end
+	for _,d in ipairs(GD.game.players[color].palaces) do
+		if d.g == obj.getGUID() then return d.p end
+	end
+	for _,d in ipairs(GD.game.players[color].quarry) do
+		if d.g == obj.getGUID() then return d.p end
+	end
+end
+
+--[[ *****************************
+Update game player order sorted by current player character IDs
+TODO: actually update and update UI
+********************************]]
+function updateTurnOrder()
+	if env.test.trace then log("updateTurnOrder()") end
+	--sort player order by character ID
+	local new_order = nil
+	for pcol,pdata in pairs(GD.game.players) do
+		if new_order == nil then
+			new_order = {pcol}
+		else
+			for i,player_color in ipairs(new_order) do
+				if pdata.character_id < GD.game.players[player_color].character_id then
+					table.insert(new_order, i, pcol)
+					break
+				elseif i == #new_order then
+					table.insert(new_order, pcol)
+					break
+				end
+			end
+		end
+	end
+	GD.game.player_order = simpleDeepCopy(new_order)
+	if env.test.debug then
+		log("New player order sorted by char ID:")
+		log(GD.game.player_order)
+	end
+
+	--TODO: update any respective UI stuff
+	log("TODO: update player turn order UI")
+end
+
+--[[ *****************************
+Set the next active player.
+Clockwise from current player if selecting initial characters.
+Uses order sorted by character ID in other stages of play.
+Returns color of current player
+********************************]]
+function setNextPlayer(first)
+	first = first or false
+	if env.test.trace then log("setNextPlayer()") end
+	local old_color = GD.game.current_player_color
+	if first then
+		GD.game.current_player = 1
+	elseif GD.game.stage == "select_starting_characters" then
+		local next = GD.game.current_player + 1
+		if next > #GD.game.player_order then next = 1 end
+		GD.game.current_player = next
+	else
+		if GD.game.stage == "initial_placement" then
+			--find first player in order that needs to place this round of placements
+			for i,pcol in ipairs(GD.game.player_order) do
+				if GD.game.players[pcol].init_placements == GD.game.init_placement then
+					GD.game.current_player = i
+					break
+				end
+			end
+		else
+			--find first player in order that has actions
+			for i,pcol in ipairs(GD.game.player_order) do
+				if GD.game.players[pcol].has_actions then
+					GD.game.current_player = i
+					break
+				end
+			end
+		end
+	end
+	GD.game.current_player_color = GD.game.player_order[GD.game.current_player]
+	broadcastToAll("Current player now "..GD.game.current_player_color)
+	if env.test.players and env.test.auto_switch then
+		if old_color != GD.game.current_player_color then
+			Player[old_color].changeColor(GD.game.current_player_color)
+		end
+	end
+	return GD.game.current_player_color
+end
+
+--[[ *****************************
+Locate the closest network node to the position.
+TODO: be smarter about city radius vs village radius.
+As is the radius is equal so dropping in a city edge
+might detect as a nearby village.  Minor thing.
+********************************]]
+function closestNode(pos)
+	if env.test.trace then log("closestNode()") end
+	local board = getObjectFromGUID(C.board_guid)
+	local nearest_node = -1
+	local shortest_dist = nil
+	for i,node in ipairs(GD.network) do
+		local dist = Vector.sqrDistance(pos, board.positionToWorld(node.center))
+		if shortest_dist then
+			if dist < shortest_dist then
+				shortest_dist = dist
+				nearest_node = i
+			end
+		else
+			shortest_dist = dist
+			nearest_node = i
+		end
+	end
+	return nearest_node
+end
+
+--[[ *****************************
+Lookup and return the id for a character card guid
+Returns -1 if not found (log an error)
+********************************]]
+function getCharacterId(guid)
+	for id,char in ipairs(C.characters) do
+		if char.g == guid then
+			return id
+		end
+	end
+	log("ERROR: getCharacterId(): no character card found for guid "..tostring(guid))
+	return -1
+end
+
+--[[ *****************************
+Set or clear selected player actions
+Called from player dial.
+params:
+	player_color - color of player
+	command: 'confirm' or 'clear'
+	actions: a list of selected actions
+TODO: implement setting the actions in player data
+********************************]]
+function setPlayerActions(params)
+	if env.test.trace then log("setPlayerActions()") end
+	if env.test.debug then log(params) end
+	local pcol = params.player_color
+	if params.command == "confirm" then
+		GD.game.players[pcol].actions_set = true
+
+		--TODO: set actions in player data, update UI etc.
+
+		--check to see if all players have set actions
+		local all_set = true
+		for _,pdata in pairs(GD.game.players) do
+			if not(pdata.actions_set) then all_set = false end
+		end
+		if all_set then
+			broadcastToAll("All players have set actions, starting player turns")
+			for _,pcol in ipairs(GD.game.player_order) do
+				local dial = getObjectFromGUID(C.action_dials[pcol])
+				dial.call("lockActionSelections")
+			end
+			GD.game.stage = "player_turns"
+			startPlayerTurn(setNextPlayer(FIRST))
+		end
+	elseif params.command == "clear" then
+		GD.game.players[pcol].actions_set = false
+	else
+		log("ERROR: setPlayerActions() unknown command "..tostring(params.command))
+	end
+end
+
+--[[ *****************************
+Start a player's action turn.
+********************************]]
+function startPlayerTurn(pcol)
+	if env.test.trace then log("startPlayerTurn()") end
+	local dial = getObjectFromGUID(C.action_dials[pcol])
+	dial.call("flipMe")
+	dial.call("showMe")
+
+	--TODO: implement This
+
+	--TODO: execute any per turn actions (action chit, 1 coin)
+	--TODO: set any character bonus/discounts (palace disc, move for free, scoring bonus)
+	--TODO: assign any free action (free build/move)
+
+	--TODO: enable UI for actions
+
 end
 
 --[[///////////////////////////////////////////////////////////]]
@@ -335,7 +801,6 @@ function testCoro()
 	log("testCoro() ending")
 	return 1
 end
-
 
 function testCityHouses(pcol, city_name)
 	log("put selected houses in "..city_name)

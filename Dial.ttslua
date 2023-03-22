@@ -132,7 +132,7 @@ function setToActionSelection()
   GD.state.action_1 = 0
   GD.state.action_2 = 0
   GD.state.click = 0
-  endableDialButtons()
+  enableDialButtons()
   resetPlayerButtons()
   resetActionPointers()
   if GD.state.flipped then flipMe() end
@@ -141,8 +141,8 @@ end
 --[[ *****************************
 --TODO: document
 ********************************]]
-function endableDialButtons()
-  if env.test.trace then log(GD.color..": endableDialButtons()") end
+function enableDialButtons()
+  if env.test.trace then log(GD.color..": enableDialButtons()") end
   for _,action in ipairs(g_buttons) do
     self.UI.setAttribute(action.."_panel","active","true")
   end
@@ -175,17 +175,24 @@ function buttonClick(player, btn, id)
   if id == "confirm" then
     disableDialButtons()
     flipMe()
+    self.UI.setAttribute("back_button_panel","active",true)
     Wait.condition(function() showMe() end, function() return self.resting end, 3)
+    --call global to set player action selections
+    local p = {
+      command = "confirm",
+      player_color=player.color,
+      actions = {"A","B","C"}, --TODO: this
+    }
+    Global.call("setPlayerActions",p)
 
-    --TODO:
-    log("TODO: call global to set player action selections")
-
-  elseif id =="unconfirm" then
-    --TODO:
-    log("TODO: call global to unset player action selection")
+  elseif id =="modify" then
+    --call global to clear player action selection
     hideMe()
-    endableDialButtons()
+    enableDialButtons()
     flipMe()
+    local p = {command="clear", player_color=player.color,}
+    Global.call("setPlayerActions",p)
+
   elseif id == "action-A" then
     log("TODO: handle action A")
     self.UI.setAttribute("action-A","active",false)
@@ -270,19 +277,16 @@ end
 --TODO: document
 ********************************]]
 function flipMe()
-  if GD.state.flipped then
-    GD.state.flipped = false
-  else
+  if not(GD.state.flipped) then
+    --turn display off before flipping to avoid weird UI movement
     self.UI.setAttribute("player_btn_panel","active",false)
-    GD.state.flipped = true
   end
   self.setLock(false)
   self.flip()
   Wait.condition(function()
     self.setLock(true)
-    if not(GD.state.flipped) then
-      self.UI.setAttribute("player_btn_panel","active",true)
-    end
+    GD.state.flipped = self.is_face_down
+    self.UI.setAttribute("player_btn_panel","active",not(GD.state.flipped))
   end, function() return self.resting end, 3)
 end
 

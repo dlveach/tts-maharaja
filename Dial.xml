@@ -13,10 +13,10 @@
         scale="1 1" />
 
   <Panel class="playerPanel"
-        active="true"
+        active="false"
         color="rgba(0,0,0,0)"
-        position="0 375 -5"
-        height="300" width="400"
+        position="50 330 -5"
+        height="300" width="500"
         rotation="0 0 180"
         scale="1 1" />
 
@@ -68,33 +68,31 @@
   </Button>
 </Panel>
 
-<Panel class="playerPanel" id="player_btn_panel" active="false">
-  <TableLayout>
-    <Row preferredHeight="60">
-      <Cell padding="5 5 0 0">
-        <!--Button id="btn_1" class="playerButton">
-          <Text id="btn_1_txt" fontSize="20" color="rgb(1,1,0)" text="Button 1"/>
-        </Button-->
-      </Cell>
-      <Cell padding="5 5 0 0">
+<Panel class="playerPanel" id="player_btn_panel" >
+  <TableLayout columnWidths="80 210 210">
+    <Row id="confirmBtnRow" preferredHeight="60" active="false">
+      <Cell padding="200 100 0 0" columnSpan="3">
         <Button id="confirm" class="playerButton">
-          <Text fontSize="20" color="rgb(1,1,0)" text="Confirm"/>
+          <Text fontSize="28" color="rgb(1,1,0)" text="Confirm"/>
         </Button>
       </Cell>
-      <Cell padding="5 5 0 0">
-        <!--Button id="btn_3" class="playerButton">
-          <Text id="btn_3_txt" fontSize="20" color="rgb(1,1,0)" text="Button 2"/>
-        </Button-->
+    </Row>
+    <Row id="extraActionBtnRow" preferredHeight="60" active="false">
+      <Cell padding="150 50 0 0" columnSpan="3">
+        <Button id="btn_3" class="playerButton">
+          <Text id="extra_action" fontSize="28" color="rgb(1,1,0)" text="Use Extra Action"/>
+        </Button>
       </Cell>
     </Row>
-    <Row preferredHeight="30" />
+    <Row id="emptyBtnRow" preferredHeight="60"/>
+    <Row preferredHeight="20" />
     <Row id="action_A_row" preferredHeight="60">
       <Cell padding="0 0 0 0">
         <Text fontSize="40" color="Gray" text="A"/>
       </Cell>
       <Cell columnSpan="2" padding="0 0 0 0">
         <Button id="action-A" class="playerButton">
-          <Text id="action_A_txt" fontSize="30" color="rgb(1,1,0)" text="Action A" />
+          <Text id="action_A_txt" fontSize="30" color="rgb(1,1,0)" text="Build a Palace + House" />
         </Button>
       </Cell>
     </Row>
@@ -105,7 +103,7 @@
       </Cell>
       <Cell columnSpan="2" padding="0 0 0 0">
         <Button id="action-B" class="playerButton">
-          <Text id="action_B_txt" fontSize="30" color="rgb(1,1,0)" text="Action B" />
+          <Text id="action_B_txt" fontSize="30" color="rgb(1,1,0)" text="Exchange Character" />
         </Button>
       </Cell>
     </Row>
@@ -116,7 +114,7 @@
       </Cell>
       <Cell columnSpan="2" padding="0 0 0 0">
         <Button id="action-C" class="playerButton">
-          <Text id="action_C_txt" fontSize="30" color="rgb(1,1,0)" text="Action C" />
+          <Text id="action_C_txt" fontSize="30" color="rgb(1,1,0)" text="Build Two Houses" />
         </Button>
       </Cell>
     </Row>
@@ -151,8 +149,8 @@
   <Button class="dialButton" id="move_btn"/>
 </Panel>
 
-<Panel class="buttonPanel" id="2-houses_panel" position="-140 20 -10" >
-  <Button class="dialButton" id="2-houses_btn"/>
+<Panel class="buttonPanel" id="2houses_panel" position="-140 20 -10" >
+  <Button class="dialButton" id="2houses_btn"/>
 </Panel>
 
 <Panel class="buttonPanel" id="house_panel" position="-90 100 -10" >

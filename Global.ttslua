@@ -13,7 +13,7 @@ env = {}
 env.test = {}
 env.test.trace = true
 env.test.debug = true
-env.test.in_dev = false
+env.test.in_dev = true
 env.test.force_fresh_save = true
 env.test.save_positions = true
 env.test.auto_switch = true
@@ -26,6 +26,7 @@ env.test.players = {"Green","Red","Blue"}
 
 env.game = {}
 env.game.fill_delay = 2
+env.game.use_help = true
 
 GD = {}
 
@@ -54,6 +55,7 @@ function onLoad(save_state)
 		GD.state.global_UI = {}
 		GD.state.board_UI = {}
 		GD.game = {}
+		GD.undo = {}
 		for _,g in pairs(C.player_pawns) do
 			getObjectFromGUID(g).setLock(true)
 		end
@@ -272,8 +274,6 @@ function coroFillPlayerBoards()
 			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 		end
 		for i=5,8 do
-			-- local pos = player_board.positionToWorld(C.player_board_pool_locations[i])
-			-- local p = {position=pos}
 			local p = {position=player.pool[i].p}
 			local obj = paste(p)[1]
 			obj.setRotation(rot)
@@ -302,6 +302,13 @@ function coroFillPlayerBoards()
 		GD.game.stage = "select_starting_characters"
 		GD.game.characters_selected = 0
 		broadcastToAll(GD.game.current_player_color.." player select a character card then continue clockwise around table")
+		local p = {dormant = false,done = false,undo = false,}
+		p.help_text = "Select a character card then click Done."
+		for _,pcol in ipairs(GD.game.player_order) do
+			p.active = (pcol == GD.game.current_player_color)
+			local player_board = getObjectFromGUID(C.player_boards[pcol])
+			player_board.call("setState",p)
+		end
 	end
 	if env.test.trace then log("coroFillPlayerBoards(): EXIT") end
 	return 1
@@ -334,19 +341,9 @@ TODO: disable DEVELOPMENT stuff
 ********************************]]
 function onObjectDrop(pcol, obj)
 	if env.test.trace then log("onObjectDrop(): pcol "..pcol..", obj "..obj.getGUID()) end
-	--TODO: remove DEVELOPMENT stuff
-	if env.test.save_positions then
-		if env.test.localToObject ~= nil then
-			local refObj = getObjectFromGUID(env.test.localToObject)
-			if refObj then
-				Notes.setNotes(tostring(refObj.positionToLocal(obj.getPosition())))
-			end
-		else
-			Notes.setNotes(tostring(obj.getPosition()))
-		end
-	end	--END DEVELOPMENT
 	if not(GD.game.stage) then return end
 	local type = obj.memo
+	obj.setVelocity(Vector(0,0,0)) --in case player "throws it"
 	if type == "character" then
 		handleCharacterDrop(pcol, obj)
 	elseif type == "palace" or type == "house" then
@@ -388,15 +385,15 @@ function handleCharacterDrop(pcol, obj)
 	if env.test.trace then log("handleCharacterDrop()") end
 	local char_id = getCharacterId(obj.getGUID())
 	local board = getObjectFromGUID(C.board_guid)
-	if pcol ~= GD.game.current_player_color then --ignore non active player
-		obj.setPosition(board.positionToWorld(C.characters[char_id].bank_pos))
-		obj.setRotation(board.getRotation())
-		return
-	end
 	if GD.game.stage == "select_starting_characters" then
-		if GD.game.players[pcol].character_id > 0 then
+		if pcol ~= GD.game.current_player_color then --ignore non active player
+			obj.setPosition(C.characters[char_id].bank_pos)
+			obj.setRotation(board.getRotation())
+			return
+		end
+		if #GD.game.players[pcol].pending_actions > 0 then --only select one
 			broadcastToColor("Character already selected", pcol)
-			obj.setPosition(board.positionToWorld(C.characters[char_id].bank_pos))
+			obj.setPosition(C.characters[char_id].bank_pos)
 			obj.setRotation(board.getRotation())
 			return
 		end
@@ -406,29 +403,20 @@ function handleCharacterDrop(pcol, obj)
 		obj.setPositionSmooth(pos, false, true)
 		obj.setRotation(rot)
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-		GD.game.players[pcol].character_id = char_id
-		GD.game.characters_selected = GD.game.characters_selected + 1
-		if GD.game.characters_selected == GD.game.player_count then
-			GD.game.stage = "initial_placement"
-			broadcastToAll("All players selected a character, begin initial placement")
-			for pcol,pdata in pairs(GD.game.players) do
-				for _,e in ipairs(pdata.pool) do
-					if e.g then getObjectFromGUID(e.g).setLock(false) end
-				end
-				GD.game.players[pcol].init_placements = 4
-			end
-			GD.game.players_init_placed = 0
-			GD.game.init_placement = 4
-			log("here's where we update player order")
-			updateTurnOrder()
-			setNextPlayer(FIRST)
-		else
-			log(tostring(GD.game.characters_selected).." of "..tostring(#GD.game.player_order).." players selected a character")
-			setNextPlayer()
-		end
+		local action = {
+			key = "select_starting_character",
+			player_color = pcol,
+			character_id = char_id,
+			undo = {
+				guid = obj.getGUID(),
+				snapback = {pos=C.characters[char_id].bank_pos, rot=board.getRotation()},
+			},
+		}
+		table.insert(GD.game.players[pcol].pending_actions, action)
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 	elseif GD.game.stage == "player_turn" then
 
-		--TODO: handle this
+		--TODO: implement this
 
 	end
 end
@@ -459,10 +447,8 @@ function handleHouseDrop(pcol, obj)
 	local color = obj.getName()
 	local function snapBack()
 		if isObjectPlaced(obj.getGUID()) then
-
 			log("TODO: Handle placed obj snapback ***")
 			--TODO: use array of GD.snaps for placed objects?
-
 		else
 			obj.setPosition(getPlayerBoardLocation(obj))
 			obj.setRotation(getObjectFromGUID(C.player_boards[color]).getRotation())
@@ -485,55 +471,30 @@ function handleHouseDrop(pcol, obj)
 				return
 			end
 			table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
-			removeFromPlayerBoard(obj)
-
-			--TODO: undo stuffs
-
-			--TODO: set position of house relative to node center, remove HACK:
+			--TODO: set position of house relative to village center, remove HACK:
 			local pos_1 = node.center - VILLAGE_OFFSET
 			local pos_2 = node.center + VILLAGE_OFFSET
 			local pos = board.positionToWorld(pos_1)
 			if #node.houses == 1 then pos = board.positionToWorld(pos_2) end
 			pos.y = 1.5
-
 			obj.setRotation(board.getRotation())
 			obj.setPosition(pos)
 			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-			GD.game.players[pcol].init_placements = GD.game.players[pcol].init_placements - 1
-			GD.game.players_init_placed = GD.game.players_init_placed + 1
-			if GD.game.players_init_placed == GD.game.player_count then
-				--reset for next round of placement until all 4 placed
-				GD.game.players_init_placed = 0
-				GD.game.init_placement = GD.game.init_placement - 1
-			end
-			if GD.game.init_placement == 0 then
-				--End of placement, setup for first round of action selection
-				GD.game.stage = "select_actions"
-				for pcol,pdata in pairs(GD.game.players) do
-					--move starting 6 houses from quarry to pool each player
-					local quarry = GD.game.players[pcol].quarry
-					local pool = GD.game.players[pcol].pool
-					for i=1,6 do
-						local index = 16 - i + 1
-						local house = getObjectFromGUID(quarry[index].g)
-						assert(house,"ERROR: handleHouseDrop() nil quarry house during setup for actions")
-						house.setPosition(pool[i].p)
-						quarry[index].g = nil
-						pool[i].g = house.getGUID()
-					end
-					--initialze player dial for action selection
-					local dial = getObjectFromGUID(C.action_dials[pcol])
-					dial.call("enableDialButtons")
-					dial.call("hideMe")
-					dial.call("flipMe")
-					GD.game.players[pcol].has_actions = true --TODO: move this to "confirm" actions?
-				end
-				broadcastToAll("Begin action selection, all players confirm selections")
-				-- setNextPlayer(FIRST)
-				return
-			else
-				setNextPlayer()
-			end
+			--add a pending action for this house placement
+			local action = {
+				key = "initial_placement",
+				player_color = pcol,
+				guid = obj.getGUID(),
+				undo = {
+					node_index = index,
+					guid = obj.getGUID(),
+					snapback = {pos=getPlayerBoardLocation(obj),rot=getObjectFromGUID(C.player_boards[pcol]).getRotation()}
+				},
+			}
+			--show done and undo buttons
+			table.insert(GD.game.players[pcol].pending_actions, action)
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
+
 		elseif node.type == "city" then
 			snapBack()
 			return
@@ -541,7 +502,6 @@ function handleHouseDrop(pcol, obj)
 			snapBack()
 			return
 		end
-		setNextPlayer()
 	else
 
 		log("TODO: handle house drop during play ***")
@@ -631,6 +591,11 @@ function updateTurnOrder()
 
 	--TODO: update any respective UI stuff
 	log("TODO: update player turn order UI")
+	for i,pcol in ipairs(GD.game.player_order) do
+		local player_board = getObjectFromGUID(C.player_boards[pcol])
+		player_board.call("setState",{turn_order=i})
+	end
+
 end
 
 --[[ *****************************
@@ -763,8 +728,11 @@ Start a player's action turn.
 function startPlayerTurn(pcol)
 	if env.test.trace then log("startPlayerTurn()") end
 	local dial = getObjectFromGUID(C.action_dials[pcol])
-	dial.call("flipMe")
-	dial.call("showMe")
+	local params = {state="player_turn"}
+	if GD.game.players[pcol].extra_actions then
+		params.extra_actions = true
+	end
+	dial.call("setState",params)
 
 	--TODO: implement This
 
@@ -776,31 +744,203 @@ function startPlayerTurn(pcol)
 
 end
 
+--[[ *****************************
+Handler for button clicks on player board
+********************************]]
+function playerBoardClick(player, btn, id)
+	if env.test.trace then log("playerBoardClick(): "..player.color..", id = "..id) end
+	local action = Split(id,'_')[1]
+	if action == "done" then
+		playerDone(player.color)
+	elseif action == "undo" then
+		playerUndo(player.color)
+	elseif action == "extraAction" then
+		extraAction(player.color)
+	else
+		log("ERROR: playerBoardClick(): unknown action id")
+		return
+	end
+end
+
+--[[ *****************************
+TODO: document
+--For all entries in the player's pending action list:
+	-- POP an entry off the LIFO stack
+	-- finallize the pendign action, update data structures etc.
+	-- remove the entry from the LIFO stack
+	-- if more entries, repeat
+********************************]]
+function playerDone(pcol)
+	if env.test.trace then log("playerDone(): "..pcol) end
+	if #GD.game.players[pcol].pending_actions == 0 then
+		log("WARN: playerDone() no actions to finaalize for player "..pcol)
+		return
+	end
+	while #GD.game.players[pcol].pending_actions > 0 do
+		local index = #GD.game.players[pcol].pending_actions
+		local action = GD.game.players[pcol].pending_actions[index]
+		if action.key == "select_starting_character" then
+			setStartingCharacter(action)
+		elseif action.key == "initial_placement" then
+			setInitialPlacement(action)
+		else
+			log("ERROR: playerDone() unknown action key "..tostring(action.key))
+			return
+		end
+		table.remove(GD.game.players[pcol].pending_actions, index)
+	end
+end
+
+--[[ *****************************
+Finalize a starting character select action
+********************************]]
+function setStartingCharacter(action)
+	if env.test.trace then log("setStartingCharacter()") end
+	if GD.game.stage ~= "select_starting_characters" then
+		log(("ERROR: setStartingCharacter() invalid game stage")) --shouldn't happen
+		return
+	end
+	local pcol = action.player_color
+	GD.game.players[pcol].character_id = action.character_id
+	GD.game.characters_selected = GD.game.characters_selected + 1
+	if GD.game.characters_selected == GD.game.player_count then
+		--All players selected a character, now setup game for initial house placement
+		updateTurnOrder()
+		setNextPlayer(FIRST)
+		GD.game.stage = "initial_placement"
+		broadcastToAll("Begin initial house placement")
+		local p ={done=false,undo=false}
+		p.help_text = "Place one starting house from Build Pool.\nOnly place on Villages."
+		for pcol,pdata in pairs(GD.game.players) do
+			for _,e in ipairs(pdata.pool) do
+				if e.g then getObjectFromGUID(e.g).setLock(false) end
+			end
+			GD.game.players[pcol].init_placements = 4
+			p.active = (pcol == GD.game.current_player_color)
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",p)
+		end
+		GD.game.players_init_placed = 0
+		GD.game.init_placement = 4
+	else
+		getObjectFromGUID(C.player_boards[pcol]).call("setState")
+		getObjectFromGUID(C.player_boards[setNextPlayer()]).call("setState", {active=true})
+	end
+end
+
+--[[ *****************************
+Finalize an initial house placement action
+********************************]]
+function setInitialPlacement(action)
+	if env.test.trace then log("setInitialPlacement()") end
+	if GD.game.stage ~= "initial_placement" then
+		log(("ERROR: setInitialPlacement() invalid game stage")) --shouldn't happen
+		return
+	end
+	local obj = getObjectFromGUID(action.guid)
+	removeFromPlayerBoard(obj)
+	GD.game.players[action.player_color].init_placements = GD.game.players[action.player_color].init_placements - 1
+	GD.game.players_init_placed = GD.game.players_init_placed + 1
+	if GD.game.players_init_placed == GD.game.player_count then
+		--reset for next round of placement until all 4 placed
+		GD.game.players_init_placed = 0
+		GD.game.init_placement = GD.game.init_placement - 1
+	end
+	if GD.game.init_placement == 0 then
+		--End of placement, setup for first round of action selection
+		GD.game.stage = "select_actions"
+		for pcol,pdata in pairs(GD.game.players) do
+			startingQuarry(pcol)
+			local dial = getObjectFromGUID(C.action_dials[pcol])
+			dial.call("setState",{state="select_actions"})
+			GD.game.players[pcol].has_actions = true --TODO: move this to "confirm" button?
+			local txt = "Secretly choose turn actions and confirm with Done\n"
+			txt = txt .. "Player turns will begin once all have confirmed\n"
+			txt = txt .. "and until then selections can be modified."
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,done=false,undo=false,help_text=txt})
+		end
+		broadcastToAll("Begin action selection")
+		return
+	else
+		getObjectFromGUID(C.player_boards[action.player_color]).call("setState")
+		getObjectFromGUID(C.player_boards[setNextPlayer()]).call("setState",{active=true})
+	end
+end
+
+--[[ *****************************
+TODO: document
+--POP an entry off the player's LIFO pending actions stack
+--undo any placements, action effects, etc.
+--remove the pending action entry
+--disable player's done button
+--if no remaining pending actinos, disable player's undo button
+********************************]]
+function playerUndo(pcol)
+	if env.test.trace then log("playerUndo(): "..pcol) end
+	local index = #GD.game.players[pcol].pending_actions
+	if index == 0 then return end
+	local action = GD.game.players[pcol].pending_actions[index]
+
+	if action.key == "select_starting_character" then
+		local obj = getObjectFromGUID(action.undo.guid)
+		obj.setPosition(action.undo.snapback.pos)
+		obj.setRotation(action.undo.snapback.rot)
+		obj.setLock(false)
+	elseif action.key == "initial_placement" then
+		local obj = getObjectFromGUID(action.undo.guid)
+		obj.setPosition(action.undo.snapback.pos)
+		obj.setRotation(action.undo.snapback.rot)
+		obj.setLock(false)
+		local node = GD.network[action.undo.node_index]
+		if node.houses[1] and node.houses[1].g == action.guid then
+			node.houses[1] = nil
+		elseif node.houses[2] and node.houses[2].g == action.guid then
+			node.houses[2] = nil
+		else
+			log("WARN: playerUndo() unable to clear house "..action.guid.."from network node")
+		end
+	else
+		log("ERROR: playerDone() unknown action key "..tostring(action.key))
+		return
+	end
+	--remove entry and update player board UI
+	table.remove(GD.game.players[pcol].pending_actions, index)
+	local player_board = getObjectFromGUID(C.player_boards[action.player_color])
+	p={done=false}
+	if #GD.game.players[pcol].pending_actions == 0 then
+		p.undo = false
+	end
+	player_board.call("setState",p)
+end
+
+--[[ *****************************
+TODO: document
+********************************]]
+function extraAction(pcol)
+	if env.test.trace then log("extraAction(): "..pcol) end
+
+end
+
+--[[ *****************************
+TODO: document
+********************************]]
+function startingQuarry(pcol)
+	if env.test.trace then log("startingQuarry(): "..pcol) end
+	local quarry = GD.game.players[pcol].quarry
+	local pool = GD.game.players[pcol].pool
+	for i=1,6 do
+		local index = 16 - i + 1
+		local house = getObjectFromGUID(quarry[index].g)
+		assert(house,"ERROR: startingQuarry() nil quarry house")
+		house.setPosition(pool[i].p)
+		quarry[index].g = nil
+		pool[i].g = house.getGUID()
+	end
+end
+
 --[[///////////////////////////////////////////////////////////]]
 --[[/////////////// DEVELOPMENTAL STUFF ///////////////////////]]
 --[[///////////////////////////////////////////////////////////]]
 
-function startCoro()
-	startLuaCoroutine(Global, "testCoro")
-end
-
-function testCoro()
-	log("testCoro() started")
-	local delay = 50
-	local pauseMe = function()
-		local count = 0
-		while count < delay do
-			count = count + 1
-			coroutine.yield(0)
-		end
-	end
-	for i=1,5 do
-		log("Iteration "..tostring(i))
-		pauseMe()
-	end
-	log("testCoro() ending")
-	return 1
-end
 
 function testCityHouses(pcol, city_name)
 	log("put selected houses in "..city_name)
@@ -863,6 +1003,22 @@ function testCityPawns(pcol, city_name)
 		o.setRotationSmooth(rot, false, true)
 		o.setPositionSmooth(board.positionToWorld(pos), false, true)
 	end
+end
+
+function getWorldPos(pcol)
+	log("Getting positions of selected objects relative to world")
+  local stuff = Player[pcol].getSelectedObjects()
+  log(#stuff.." selected objects to process")
+	local s=""
+	for i,o in ipairs(stuff) do
+    local p = o.getPosition()
+		local t = tostring(i)..': '..o.getGUID()..': '..tostring(p)
+		log(t)
+		s = s .. t .. '\n'
+	end
+	if s ~= "" then
+    Notes.setNotes(s)
+  end
 end
 
 function getLTB(pcol)

@@ -1,0 +1,125 @@
+<XmlLayout xmlns="XmlLayout"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd">
+
+
+<Defaults>
+
+  <Button
+        hoverClass="hover"
+        pressClass="press"
+        selectClass="select"
+        onClick="Global/playerBoardClick"
+        image="Sprites/Layout/Button"
+        color="Blue" />
+  <Button class="hover"
+        color="Cyan" />
+  <Button class="press"
+        color="White" />
+  <Button class="select"
+        color="White" />
+
+  <TableLayout
+        useGlobalCellPadding="false"
+        rowBackgroundColor="rgba(0,0,0,0)" />
+
+  <Row
+        dontUseTableRowBackground="true"
+        color="rgba(0,0,0,0)"  />
+
+  <Cell
+        dontUseTableCellBackground="true" />  <!-- false to show grid lines -->
+
+  <Panel raycastTarget="false" />
+
+  <Panel class="infoPanel"
+        active="false"
+        color="rgba(0,0,0,0)"
+        position="85 -180 -10"
+        height="175" width="590"
+        rotation="0 0 180"
+        scale="1 1" />  <!-- set color to rgba(0,0,0,0.4) for development -->
+
+  <Panel class="helpPanel"
+        color="Blue"
+        image="Sprites/Layout/Base"
+        padding="5 5 5 5" />
+
+  <Text
+        color="rgb(1,1,0)"
+        textShadow="rgba(0,0,0,0.6)" />
+
+</Defaults>
+
+<Panel id="infoPanel" class="infoPanel">
+  <TableLayout columnWidths="100 70 0">
+    <Row preferredHeight="100">
+      <Cell padding="10 10 5 15">
+        <Panel color="Blue" image="Sprites/Layout/Base">
+          <Text id="turnOrder" fontSize="60" color="rgb(1,1,0)" text="0" />
+        </Panel>
+      </Cell>
+      <Cell padding="65 0 0 0" columnSpan="2">
+        <Panel id="helpTextPanel" class="helpPanel">
+          <Panel color="#031427">
+            <Text id="helpText" fontSize="16" color="rgb(0.9,0.9,0.9)">
+              This is a some help text that will be shown to the player.
+              Intended to be instructions and other relevant info.
+              Can have a third line.
+            </Text>
+          </Panel>
+        </Panel>
+      </Cell>
+    </Row>
+    <Row preferredHeight="75">
+      <Cell columnSpan="2">
+      </Cell>
+      <Cell>
+        <TableLayout columnWidths="100 0 100">
+          <Row preferredHeight="60">
+            <Cell padding="15 5 10 10">
+              <Panel id="doneBtnPanel">
+                <Button id="done_btn">
+                  <Text fontSize="18" text="Done" />
+                </Button>
+              </Panel>
+            </Cell>
+            <Cell padding="0 0 0 0">
+              <Panel id="extraActionsPanel">
+                <TableLayout columnWidths="40 60 60 40 0" >
+                  <Row>
+                    <Cell/>
+                    <Cell padding="0 0 0 0">
+                      <Text fontSize="16">
+                        Extra
+                        Actions
+                      </Text>
+                    </Cell>
+                    <Cell padding="0 0 0 0">
+                      <Image id="extraAction_btn" image="action_token" onClick="Global/playerBoardClick" />
+                    </Cell>
+                    <Cell padding="0 20 0 0">
+                      <Text id="extraActionsText" fontSize="20" text="0"/>
+                    </Cell>
+                    <Cell/>
+                  </Row>
+                </TableLayout>
+              </Panel>
+            </Cell>
+            <Cell padding="5 15 10 10">
+              <Panel id="undoBtnPanel">
+                <Button id="undo_btn">
+                  <Text fontSize="18" text="Undo" />
+                </Button>
+              </Panel>
+            </Cell>
+          </Row>
+        </TableLayout>
+      </Cell>
+    </Row>
+  </TableLayout>
+
+</Panel>
+
+
+</XmlLayout>

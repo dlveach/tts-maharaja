@@ -1,0 +1,99 @@
+--[[///////////////////////////////////////////////////////////////////////////////////////////////
+Maharaja player board
+
+///////////////////////////////////////////////////////////////////////////////////////////////////]]
+
+env={}
+
+--[[ *****************************
+TTS Game Load and restore state if saved.
+********************************]]
+function onLoad(save_state)
+  gid = self.getName().."_PlayerBoard:"
+  env = Global.getTable("env")
+  GD = {}
+  GD.color = self.getName()
+  if save_state ~= "" then
+    if env.test.trace then log(gid.."onLoad(): Loading from saved state") end
+    local restore_data = JSON.decode(saved_data)
+    GD = restore_data
+  else
+    if env.test.trace then log(gid.."onLoad(): Loading from fresh state") end
+    GD.state = {}
+    GD.state.dormant = true
+    GD.state.active_player = false
+    GD.state.done = false
+    GD.state.undo = false
+    GD.state.turn_order = 0
+    GD.state.extra_actions = 0
+    GD.state.help_text = ""
+  end
+  updateUI()
+end
+
+--[[ *****************************
+TTS save state function.
+********************************]]
+function onSave()
+  local saved_data = JSON.encode(GD)
+  if env.test.force_fresh_save then
+    saved_data = ""
+  end
+  return saved_data
+end
+
+--[[ *****************************
+Update the UI to the current board (object) state.
+********************************]]
+function updateUI()
+  if env.test.debug then log(gid.."updateUI()") end
+  if GD.state.dormant then
+    self.UI.setAttribute("infoPanel","active", false)
+  else
+    self.UI.setAttribute("infoPanel","active", true)
+    if GD.state.turn_order > 0 then
+      self.UI.setAttribute("turnOrder","text", tostring(GD.state.turn_order))
+    else
+      self.UI.setAttribute("turnOrder","text","?")
+    end
+    self.UI.setAttribute("doneBtnPanel","active", GD.state.active_player and GD.state.done)
+    self.UI.setAttribute("undoBtnPanel","active", GD.state.active_player and GD.state.undo)
+    self.UI.setAttribute("extraActionsPanel","active", GD.state.extra_actions > 0)
+    self.UI.setAttribute("extraActionsText","text",tostring(GD.state.extra_actions))
+    if env.game.use_help then
+      self.UI.setAttribute("helpText","text", GD.state.help_text)
+      self.UI.setAttribute("helpTextPanel","active", GD.state.active_player)
+    end
+  end
+end
+
+--[[ *****************************
+Main 'setter' function for board UI state.
+params{}:
+  dormant - (Bool) Show/Hide the board UI.
+  active -  (Bool) True when this is the active player, show buttons.
+  undo - (Bool) True if Undo button should be shown.
+  turn_order - (Int) Player's turn order.  Shows '?' if < 1.
+  extra_actions -(Int) Number of extra actions, shows button if > 0.
+  show_help - (Bool) Show/Hide the help text box above the board.
+  help_text - (Text) The help text to display.
+********************************]]
+function setState(params)
+  if env.test.trace then log(gid.."setState()") end
+  if env.test.debug then log(params) end
+  if params then
+    if params.dormant != nil then GD.state.dormant = params.dormant end
+    if params.active != nil then GD.state.active_player = params.active end
+    if params.done != nil then GD.state.done = params.done end
+    if params.undo != nil then GD.state.undo = params.undo end
+    if params.turn_order != nil then GD.state.turn_order = params.turn_order end
+    if params.extra_actions != nil then GD.state.extra_actions = params.extra_actions end
+    if params.help_text != nil then GD.state.help_text = params.help_text end
+  else
+    --defaults to non-active player if no params supplied
+    GD.state.active_player = false
+    GD.state.done = false
+    GD.state.undo = false
+  end
+  updateUI()
+end

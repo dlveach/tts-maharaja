@@ -9,7 +9,7 @@ Maharaja player action dial
 ///////////////////////////////////////////////////////////////////////////////////////////////////]]
 
 
-g_buttons = {"track","coins","character","palace-house","palace","quarry","move","2-houses","house",}
+g_buttons = {"track","coins","character","palace-house","palace","quarry","move","2houses","house",}
 g_pointer_rot_offsets = {184,142,104,64,28,-15,-55,-95,-135}
 g_pointer = {
   name = "pointer-1",
@@ -27,11 +27,23 @@ g_back_decal = {
 }
 g_player_colors = {"Yellow","Red","Green","Blue","Purple"}
 
+g_action_labels = {
+	["track"] = "Governor Track",
+	["coins"] = "Get 2 Gold",
+	["character"] = "Exchange Character",
+	["palace-house"] = "Build a Palace + House",
+	["palace"] = "Build a Palace",
+	["quarry"] = "Quarry 2 Houses",
+	["move"] = "Move a House",
+	["2houses"] = "Build 2 Houses",
+	["house"] = "Build 1 House",
+ }
+
 env = {}
-env.test = {}
-env.test.force_fresh_save = true
-env.test.trace = true
-env.test.debug = true
+-- env.test = {}
+-- env.test.force_fresh_save = true
+-- env.test.trace = true
+-- env.test.debug = true
 
 --[[ *****************************
 Load function
@@ -39,6 +51,7 @@ Load function
 function onLoad(save_state)
   GD = {}
   GD.color = self.getName()
+  env = Global.getTable("env")
   if save_state ~= "" then
     if env.test.trace then log(GD.color..": onLoad(): Loading from saved state") end
     local restore_data = JSON.decode(saved_data)
@@ -50,9 +63,11 @@ function onLoad(save_state)
   else
     if env.test.trace then log(GD.color..": onLoad(): Loading from fresh state") end
     GD.state = {}
-    GD.state.action_1 = 0
-    GD.state.action_2 = 0
+    GD.state.action_1 = ""
+    GD.state.action_2 = ""
+    GD.state.action_3 = ""
     GD.state.click = 0
+    GD.state.stage = "select_actions"
     --setup visibility string
     GD.hide_from_players = {}
     for _,pcol in ipairs(g_player_colors) do
@@ -72,7 +87,9 @@ function onLoad(save_state)
     for _,btn in ipairs(g_buttons) do
       self.UI.setAttribute(btn.."_panel","visibility",GD.color)
     end
-    resetPlayerButtons()
+    if not(env.test.in_dev) then
+      resetPlayerButtons()
+    end
   end
 end
 
@@ -88,15 +105,16 @@ function onSave()
 end
 
 function resetPlayerButtons()
-  self.UI.setAttribute("confirm","active",false)
+  if env.test.trace then log(GD.color..": resetPlayerButtons()") end
+  self.UI.setAttribute("player_btn_panel","active",false)
+  self.UI.setAttribute("confirmBtnRow","active",false)
+  self.UI.setAttribute("extraActionBtnRow","active",false)
+  self.UI.setAttribute("emptyBtnRow","active",true)
   self.UI.setAttribute("player_btn_panel","visibility",GD.color)
   self.UI.setAttribute("back_button_panel","visibility",GD.color)
   self.UI.setAttribute("action_A_row","active",false)
-  self.UI.setAttribute("action-A","active",false)
   self.UI.setAttribute("action_B_row","active",false)
-  self.UI.setAttribute("action-B","active",false)
   self.UI.setAttribute("action_C_row","active",false)
-  self.UI.setAttribute("action-C","active",false)
 end
 
 --[[ *****************************
@@ -129,13 +147,43 @@ end
 function setToActionSelection()
   if env.test.trace then log(GD.color..": setToActionSelection()") end
   self.UI.setAttribute("back_button_panel","active",true)
-  GD.state.action_1 = 0
-  GD.state.action_2 = 0
+  GD.state.action_1 = ""
+  GD.state.action_2 = ""
+  GD.state.action_3 = ""
   GD.state.click = 0
   enableDialButtons()
   resetPlayerButtons()
   resetActionPointers()
   if GD.state.flipped then flipMe() end
+end
+
+--[[ *****************************
+--TODO: document
+********************************]]
+function setState(params)
+  if env.test.trace then log(GD.color..": setState()") end
+  if env.test.debug then log(params) end
+  if params.state == "select_actions" then
+    GD.state.stage = "select_actions"
+    enableDialButtons()
+    resetPlayerButtons()
+    hideMe()
+    flipMe()
+  elseif params.state == "player_turn" then
+    GD.state.stage = "player_turn"
+    self.UI.setAttribute("player_btn_panel","visibility","")
+    self.UI.setAttribute("confirmBtnRow","active",false)
+    if params.extra_actions then
+      self.UI.setAttribute("extraActionBtnRow","active",true)
+    else
+      self.UI.setAttribute("emptyBtnRow","active",true)
+    end
+    flipMe()
+    showMe()
+    Wait.frames(function() reloadUI() end, 1)    --HACK:
+  else
+    log(GD.color..": ERROR: setState() unknown state")
+  end
 end
 
 --[[ *****************************
@@ -181,10 +229,13 @@ function buttonClick(player, btn, id)
     local p = {
       command = "confirm",
       player_color=player.color,
-      actions = {"A","B","C"}, --TODO: this
+      actions = {
+        GD.state.action_1,
+        GD.state.action_2,
+        GD.state.action_3,
+      },
     }
     Global.call("setPlayerActions",p)
-
   elseif id =="modify" then
     --call global to clear player action selection
     hideMe()
@@ -192,18 +243,27 @@ function buttonClick(player, btn, id)
     flipMe()
     local p = {command="clear", player_color=player.color,}
     Global.call("setPlayerActions",p)
-
   elseif id == "action-A" then
-    log("TODO: handle action A")
-    self.UI.setAttribute("action-A","active",false)
+    if GD.state.stage == "player_turn" then
+      log(GD.color..": TODO: buttonClick() handle action A")
+      self.UI.setAttribute("action-A","active",false)
+    end
   elseif id == "action-B" then
-    log("TODO: handle action B")
-    self.UI.setAttribute("action-B","active",false)
+    if GD.state.stage == "player_turn" then
+      log(GD.color..": TODO: buttonClick() handle action B")
+      self.UI.setAttribute("action-B","active",false)
+    end
   elseif id == "action-C" then
-    log("TODO: handle action C")
-    self.UI.setAttribute("action-C","active",false)
+    if GD.state.stage == "player_turn" then
+      log(GD.color..": TODO: buttonClick() handle action C")
+      self.UI.setAttribute("action-C","active",false)
+    end
+  elseif id =="extra_action" then
+    if GD.state.stage == "player_turn" then
+      log(GD.color..": TODO: buttonClick() extra action button")
+    end
   else
-    log("ERROR: unknown button id")
+    log(GD.color..": ERROR: buttonClick() unknown button id")
   end
 end
 
@@ -214,29 +274,37 @@ function dialClick(player, btn, id)
   if env.test.trace then log(GD.color..": dialClick(): id="..tostring(id)) end
   local action = Split(id,'_')[1]
   local index = indexOf(g_buttons,action)
+  local button_label = g_action_labels[action]
   local id = ""
   assert(index > 0, GD.color..": ERROR: dialClick() no button index found for action")
   if GD.state.extra_action then
     --TODO: handle this
   end
   if GD.state.click == 1 or GD.state.click == 0 then
-    GD.state.action_1 = index
+    GD.state.action_1 = action
     id = "pointer-1"
-    self.UI.setAttribute("action_A_txt","text",action)
+    self.UI.setAttribute("action_A_txt","text",button_label)
     self.UI.setAttribute("action_A_row","active",true)
     self.UI.setAttribute("action-A","active",true)
     GD.state.click = 2
-  else
-    GD.state.action_2 = index
+  elseif GD.state.click == 2 then
+    GD.state.action_2 = action
     id = "pointer-2"
     GD.state.click = 1
-    self.UI.setAttribute("action_B_txt","text",action)
+    self.UI.setAttribute("action_B_txt","text",button_label)
     self.UI.setAttribute("action_B_row","active",true)
     self.UI.setAttribute("action-B","active",true)
-    self.UI.setAttribute("confirm","active",true)
+    self.UI.setAttribute("emptyBtnRow","active",false)
+    self.UI.setAttribute("confirmBtnRow","active",true)
+  elseif GD.state.click == 3 then
+    log(GD.color..": TODO: dialClick() handle extra action click")
   end
   setPointerRotation(id, index)
-  self.UI.setAttribute("player_btn_panel","active","true")
+  if toboolean(self.UI.getAttribute("player_btn_panel","active")) == false then
+    self.UI.setAttribute("player_btn_panel","active",true)
+  --HACK: no idea why but need this to get table columns to size right
+    Wait.frames(function() reloadUI() end, 1)
+  end
 end
 
 --[[ *****************************
@@ -296,6 +364,16 @@ end
 function dumpData(params)
   log("State data for "..self.getGUID()..": "..GD.color)
   log(GD)
+end
+
+--[[ *****************************
+--TODO: document
+HACK: this for some reason is needed to get table columnWidths to work
+when player_btn_panel is shown
+********************************]]
+function reloadUI()
+  if env.test.trace then log(GD.color..": reloadUI()") end
+  self.UI.setXmlTable(self.UI.getXmlTable())
 end
 
 require("tts-lib/utils")

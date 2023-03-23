@@ -97,13 +97,20 @@ C.player_board_character_location = Vector(1.205481, 0.05, -0.207062)
 
 --TODO: should bank_pos be local to world vs local to board (as is)?
 C.characters = {
-  {g="69c90c", name="Mogul", city="Ahaadabad", bank_pos=Vector(-0.681584, 2.807333, -1.156584),},
-  {g="3e347b", name="Trader", city="Khajuraho", bank_pos=Vector(-0.437403, 2.807677, -1.156537),},
-  {g="5664d4", name="Sadhu", city="Agra", bank_pos=Vector(-0.196147, 2.794699, -1.156066),},
-  {g="ad74d6", name="Wandering Monk", city="Jodupur", bank_pos=Vector(0.047476, 2.82561, -1.15568),},
-  {g="524d26", name="Builder", city="Delhi", bank_pos=Vector(0.289758, 2.795385, -1.155096),},
-  {g="26dc78", name="Artisan", city="Bikaner", bank_pos=Vector(0.53427, 2.820476, -1.154745),},
-  {g="334d6b", name="Yogi", city="Jaipur", bank_pos=Vector(0.782211, 2.828738, -1.157973),},
+  -- {g="69c90c", name="Mogul", city="Ahaadabad", bank_pos=Vector(-0.681584, 2.807333, -1.156584),},
+  -- {g="3e347b", name="Trader", city="Khajuraho", bank_pos=Vector(-0.437403, 2.807677, -1.156537),},
+  -- {g="5664d4", name="Sadhu", city="Agra", bank_pos=Vector(-0.196147, 2.794699, -1.156066),},
+  -- {g="ad74d6", name="Wandering Monk", city="Jodupur", bank_pos=Vector(0.047476, 2.82561, -1.15568),},
+  -- {g="524d26", name="Builder", city="Delhi", bank_pos=Vector(0.289758, 2.795385, -1.155096),},
+  -- {g="26dc78", name="Artisan", city="Bikaner", bank_pos=Vector(0.53427, 2.820476, -1.154745),},
+  -- {g="334d6b", name="Yogi", city="Jaipur", bank_pos=Vector(0.782211, 2.828738, -1.157973),},
+  {g="69c90c", name="Mogul", city="Ahaadabad", bank_pos=Vector(8.365609, 3.621516, 20.141489),},
+  {g="3e347b", name="Trader", city="Khajuraho", bank_pos=Vector(5.391432, 3.721516, 20.140337),},
+  {g="5664d4", name="Sadhu", city="Agra", bank_pos=Vector(2.450038, 3.621516, 20.133562),},
+  {g="ad74d6", name="Wandering Monk", city="Jodupur", bank_pos=Vector(-0.518785, 3.621516, 20.128057),},
+  {g="524d26", name="Builder", city="Delhi", bank_pos=Vector(-3.471251, 3.621516, 20.120138),},
+  {g="26dc78", name="Artisan", city="Bikaner", bank_pos=Vector(-6.450894, 3.621516, 20.115044),},
+  {g="334d6b", name="Yogi", city="Jaipur", bank_pos=Vector(-9.469384, 3.621516, 20.120684),},
 }
 
 C.cities = {
@@ -186,5 +193,6 @@ C.player_data = {
   character_id = -1,
   has_actions = false,
   free_actions = {},
+  pending_actions = {},
 
 }

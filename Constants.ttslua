@@ -194,5 +194,6 @@ C.player_data = {
   has_actions = false,
   free_actions = {},
   pending_actions = {},
+  dial_actions = {},
 
 }

@@ -13,7 +13,7 @@
         scale="1 1" />
 
   <Panel class="playerPanel"
-        active="true"
+        active="false"
         color="Blue"
         image="Sprites/Layout/Base"
         position="0 330 -5"
@@ -80,7 +80,7 @@
   </Button>
 </Panel>
 
-<Panel class="playerPanel" id="player_actions_panel">
+<Panel id="player_actions_panel" class="playerPanel">
   <Panel color="#031427">
     <TableLayout columnWidths="100 0">
       <Row preferredHeight="35" >

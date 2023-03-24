@@ -62,7 +62,7 @@
       <Cell padding="65 0 0 0" columnSpan="2">
         <Panel id="helpTextPanel" class="helpPanel">
           <Panel color="#031427">
-            <Text id="helpText" fontSize="16" color="rgb(0.9,0.9,0.9)">
+            <Text id="helpText" fontSize="14" color="rgb(0.8,0.8,0.8)">
               This is a some help text that will be shown to the player.
               Intended to be instructions and other relevant info.
               Can have a third line.

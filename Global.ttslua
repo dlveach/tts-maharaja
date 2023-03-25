@@ -79,7 +79,7 @@ end
 HACK: reload an object's XML UI
 ********************************]]
 function reloadUI(guid)
-	if env.test.trace then log("*** HACK: reloadUI() guid: "..tostring(guid)) end
+	if env.test.trace then log("reloadUI() guid: "..tostring(guid)) end
 	local obj = getObjectFromGUID(guid)
 	if obj ~= nil then obj.UI.setXml(obj.UI.getXml()) end
 end
@@ -102,6 +102,11 @@ TODO: implement
 function restoreGameState()
 	if env.test.trace then log("restoreGameState()") end
 	log("TODO: restoreGameState()")
+
+	--TODO: TEST THIS: rebuild the status display XML
+	setupStatusPanel()
+	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
+
 end
 
 --[[ ******************************
@@ -240,7 +245,6 @@ function setupStatusPanel()
 	local status_table = getXmlElement("status_table",status_panel)
 	local columnWidths="100 40"
 	local panel_width = 140
-
 	--setup the header row
 	local index = 3
 	local player_columns = {}
@@ -261,16 +265,13 @@ function setupStatusPanel()
 			index = index + 1
 		end
 	end
-
 	--setup the city rows
-	--TODO: highlight city being scored this round
 	local city_row = getXmlElement("status_row_template",status_table)
 	local temp_row = simpleDeepCopy(city_row)
 	local player_cell = getXmlElement("status_p_template",temp_row)
 	status_table.children[2] = nil --wipe out the template so it can be replaced
 	for i,gov in ipairs(GD.game.governor_track) do
 		local row = simpleDeepCopy(temp_row)
-		-- local ref = 7+1-i
 		local ref = gov.UI_ref
 		log("creating row for child "..tostring(ref))
 		row.attributes.id = "status_row_"..tostring(ref)
@@ -346,6 +347,7 @@ function setupPlayers()
 		if contains(seated,pcol) then table.insert(GD.game.player_order,pcol) end
 	end
 	GD.game.players = {}
+	GD.game.status_visibility = "Pink"
 	for _,pcol in ipairs(GD.game.player_order) do
 		GD.game.players[pcol] = simpleDeepCopy(C.player_data)
 		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
@@ -355,7 +357,9 @@ function setupPlayers()
 			local pos = player_board.positionToWorld(C.player_board_pool_locations[i])
 			table.insert(GD.game.players[pcol].pool, i, {g=nil,p=pos})
 		end
+		GD.game.status_visibility = GD.game.status_visibility..'|'..pcol
 	end
+	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
 	GD.game.current_player = math.random(#GD.game.player_order)
 	GD.game.current_player_color = GD.game.player_order[GD.game.current_player]
 	broadcastToAll("Starting player will be "..GD.game.current_player_color)
@@ -1144,30 +1148,28 @@ end
 
 
 --[[ *****************************
-Toggle the city status display
-TODO: implement
+Toggle the city status display for the player who clicked.
 ********************************]]
 function statusClick(player, btn, id)
-	log("statusClick() id: "..tostring(id))
-
-	--TODO: convert this to hide from/show to player who clicked
-	if not(GD.game.players[player.color].status_panel) then
-		--TODO: show to player
-		log("TODO: show to player")
-
-		GD.game.players[player.color].status_panel = true
+	if env.test.trace then log("statusClick() id: "..tostring(id)) end
+	-- if env.test.debug then log(GD.game.status_visibility) end
+	local players = Split(GD.game.status_visibility,'|')
+	local index = indexOf(players, player.color)
+	if index > 0 then
+		table.remove(players,index)
 	else
-		--TODO: hide from player
-		log("TODO: hide from player")
-
-		GD.game.players[player.color].status_panel = false
+		table.insert(players,player.color)
 	end
-
-	-- if toboolean(UI.getAttribute("status_info", "active")) then
-	-- 	UI.setAttribute("status_info","active", false)
-	-- else
-	-- 	UI.setAttribute("status_info","active", true)
-	-- end
+	GD.game.status_visibility = ""
+	for _,pcol in ipairs(players) do
+		if GD.game.status_visibility == "" then
+			GD.game.status_visibility = pcol
+		else
+			GD.game.status_visibility = GD.game.status_visibility .."|"..pcol
+		end
+	end
+	-- if env.test.debug then log("Setting vis to "..GD.game.status_visibility) end
+	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
 end
 
 --[[ *****************************
@@ -1185,6 +1187,31 @@ function startingQuarry(pcol)
 		quarry[index].g = nil
 		pool[i].g = house.getGUID()
 	end
+end
+
+--[[ *****************************
+TODO: document
+********************************]]
+function setGovernorButtons(on)
+	on = on or false
+	if env.test.trace then log("enableGovernorButtons()") end
+	local board = getObjectFromGUID(C.board_guid)
+	for _,gov in ipairs(GD.game.governor_track) do
+		local id = "gov_"..tostring(gov.row)
+		if on then
+			log("Turn button on for image in row "..id)
+			board.UI.setClass(id ,"gImg_")
+		else
+			log("Turn button off for image in row "..id)
+			board.UI.setClass(id,"gImg")
+		end
+	end
+	Wait.frames(function() reloadUI(C.board_guid) end, 60)
+end
+
+function governorClick(player, btn, id)
+	if env.test.trace then log("governorClick() "..player.color..", id: "..tostring(id)) end
+
 end
 
 --[[///////////////////////////////////////////////////////////]]

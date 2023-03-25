@@ -97,13 +97,6 @@ C.player_board_character_location = Vector(1.205481, 0.05, -0.207062)
 
 --TODO: should bank_pos be local to world vs local to board (as is)?
 C.characters = {
-  -- {g="69c90c", name="Mogul", city="Ahaadabad", bank_pos=Vector(-0.681584, 2.807333, -1.156584),},
-  -- {g="3e347b", name="Trader", city="Khajuraho", bank_pos=Vector(-0.437403, 2.807677, -1.156537),},
-  -- {g="5664d4", name="Sadhu", city="Agra", bank_pos=Vector(-0.196147, 2.794699, -1.156066),},
-  -- {g="ad74d6", name="Wandering Monk", city="Jodupur", bank_pos=Vector(0.047476, 2.82561, -1.15568),},
-  -- {g="524d26", name="Builder", city="Delhi", bank_pos=Vector(0.289758, 2.795385, -1.155096),},
-  -- {g="26dc78", name="Artisan", city="Bikaner", bank_pos=Vector(0.53427, 2.820476, -1.154745),},
-  -- {g="334d6b", name="Yogi", city="Jaipur", bank_pos=Vector(0.782211, 2.828738, -1.157973),},
   {g="69c90c", name="Mogul", city="Ahaadabad", bank_pos=Vector(8.365609, 3.621516, 20.141489),},
   {g="3e347b", name="Trader", city="Khajuraho", bank_pos=Vector(5.391432, 3.721516, 20.140337),},
   {g="5664d4", name="Sadhu", city="Agra", bank_pos=Vector(2.450038, 3.621516, 20.133562),},
@@ -121,6 +114,16 @@ C.cities = {
   Agra = {node=20, character=3},
   Ahaadabad = {node=30, character=1},
   Khajuraho = {node=35, character=2},
+}
+
+C.governors = {
+  {city="Bikaner",node=1,},
+  {city="Jaipur",node=4,},
+  {city="Delhi",node=7,},
+  {city="Jodupur",node=18,},
+  {city="Agra",node=20,},
+  {city="Ahaadabad",node=30,},
+  {city="Khajuraho",node=35,},
 }
 
 C.city_house_offsets = {
@@ -183,6 +186,7 @@ C.city_pawn_offsets = {
   { 0.084526, 0.552977, 0.139443 },
 }
 
+--player defaults
 C.player_data = {
   quarry = {},
   pool = {},
@@ -195,5 +199,5 @@ C.player_data = {
   free_actions = {},
   pending_actions = {},
   dial_actions = {},
-
+  status_panel = true,
 }

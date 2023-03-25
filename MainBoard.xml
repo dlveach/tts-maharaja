@@ -1,0 +1,107 @@
+<XmlLayout xmlns="XmlLayout"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd">
+
+
+<Defaults>
+
+  <Button
+        hoverClass="hover"
+        pressClass="press"
+        selectClass="select"
+        onClick="Global/playerBoardClick"
+        image="Sprites/Layout/Button"
+        color="Blue" />
+  <Button class="hover"
+        color="Cyan" />
+  <Button class="press"
+        color="White" />
+  <Button class="select"
+        color="White" />
+
+  <TableLayout
+        useGlobalCellPadding="false"
+        rowBackgroundColor="rgba(0,0,0,0)" />
+
+  <Row
+        dontUseTableRowBackground="true"
+        color="rgba(0,0,0,0)"  />
+
+  <Cell
+        dontUseTableCellBackground="true" />  <!-- false to show grid lines -->
+
+  <Panel raycastTarget="false" />
+
+  <Text
+        fontSize="40"
+        color="rgb(1,1,0)"
+        textShadow="rgba(0,0,0,0.6)" />
+
+  <Panel class="governorPanel"
+        active="true"
+        color="#270A01"
+        position="-132.5 0 -15"
+        height="1920" width="140"
+        rotation="0 0 180"
+        scale="0.1 0.1" />  <!-- set color to rgba(0,0,0,0.4) for development  color="#0E2F0D"-->
+
+  <Row class="govRow"
+        preferredHeight="112"/>
+
+  <Cell class="govCell"
+        padding="20 20 10 10" />
+
+  <!-- Use UI.setClass(gImg_) to enable buttons on Governor images during the Gov Track action -->
+  <!-- Use UI.setClass(gImg) to disable buttons on Governor images -->
+  <Image class="gImg" />
+  <Image class="gImg_"
+        onClick="Global/governorClick" />
+
+  <Image class="cImg"
+        preserveAspect="true"/>
+  <Image class="cImg_"
+        onMouseEnter="Global/mouseOverCity"
+        onMouseExit="Global/mouseExitCity"
+        onClick="Global/mouseClickCity"
+        preserveAspect="true"/>
+
+  <Panel class="cityPanel"
+    color="Black"
+    active="true"
+    height="100" width="100"
+    rotation = "0 0 180"
+    scale="0.1 0.1" />
+
+</Defaults>
+
+<Panel id="governor_panel" class="governorPanel">
+  <TableLayout>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_17" class="gImg" image="Gray-10"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_16" class="gImg" image="Gray-9"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_15" class="gImg" image="Gray-8"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_14" class="gImg" image="Gray-7"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_13" class="gImg" image="Gray-6"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_12" class="gImg" image="Gray-5"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_11" class="gImg" image="Gray-5"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_10" class="gImg" image="Gray-3"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_9" class="gImg" image="Gray-2"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_8" class="gImg" image="Gray-1"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_7" class="gImg" image="Gray"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_6" class="gImg" image="Gray"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_5" class="gImg" image="Gray"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_4" class="gImg" image="Gray"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_3" class="gImg" image="Gray"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_2" class="gImg" image="Gray"/></Cell></Row>
+    <Row class="govRow"><Cell class="govCell"><Image id="gov_1" class="gImg" image="Gray"/></Cell></Row>
+  </TableLayout>
+</Panel>
+
+<Panel class="cityPanel" position="79 -60 -15"><Image id="Bikaner" class="cImg" image="Bikaner"/></Panel>
+<Panel class="cityPanel" position="-14.5 -43 -15"><Image id="Jaipur" class="cImg" image="Jaipur"/></Panel>
+<Panel class="cityPanel" position="-70 -55 -15"><Image id="Delhi" class="cImg" image="Delhi"/></Panel>
+<Panel class="cityPanel" position="90.5 10.5 -15"><Image id="Jodupur" class="cImg" image="Jodupur"/></Panel>
+<Panel class="cityPanel" position="-79.5 12 -15"><Image id="Agra" class="cImg" image="Agra"/></Panel>
+<Panel class="cityPanel" position="75 76 -15"><Image id="Ahaadabad" class="cImg" image="Ahaadabad"/></Panel>
+<Panel class="cityPanel" position="-68 81 -15"><Image id="Khajuraho" class="cImg" image="Khajuraho"/></Panel>
+
+</XmlLayout>

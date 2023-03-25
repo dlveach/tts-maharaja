@@ -3,4 +3,143 @@
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd">
 
+ <Defaults>   <!-- BoSL defaults -->
+
+  <Button hoverClass="hover"
+    pressClass="press"
+    selectClass="select"
+    color="blue"
+    textColor="white"
+    fontSize="14"
+    font="Arial"
+    image="Sprites/Layout/Button"
+    textShadow="rgba(0,0,0,0.6)" />
+  <Button class="hover"
+    color="cyan"
+    textColor="white"
+    textShadow="rgba(0,0,0,1)"/>
+  <Button class="press"
+    color="blue"
+    textColor="white" />
+  <Button class="select"
+    color="blue"
+    textColor="white"
+    textShadow="rgba(0,0,0,1)" />
+
+  <Toggle class="Options"
+    onValueChanged="startOptionsBtn"
+    colors="blue|cyan|cyan|grey)"
+    textColor="grey" />
+
+  <TableLayout
+    useGlobalCellPadding="false"
+    rowBackgroundColor="rgba(0,0,0,0)" />
+
+  <Row
+    preferredHeight="30"
+    dontUseTableRowBackground="true"
+    color="rgba(0,0,0,0)"  />
+
+  <!-- dontUseTableCellBackground false during dev to show lines -->
+  <Cell
+    dontUseTableCellBackground="true"
+    color="rgba(0,0,0,0)"
+    padding="0 0 0 0" />
+
+  <Text class="small"
+    fontSize="12"
+    color="white"/>
+  <Text class="medium"
+    fontSize="14"
+    color="white"/>
+  <Text class="med_large"
+    fontSize="18"
+    color="white"/>
+  <Text class="large"
+    fontSize="20"
+    color="white" />
+
+</Defaults>
+
+<Panel id="startPanel"  active="true"
+  class="StartPanel"
+  height="400" width="500"
+  padding="20 20 20 20"
+  allowDragging="true"
+  returnToOriginalPositionWhenReleased="false"
+  rectAlignment="MiddleCenter"
+  color="#003699"
+  image="Sprites/Layout/Base">
+  <VerticalLayout
+    color="#00091a"
+    image="Sprites/Layout/Base"
+    childAlignment="MiddleCenter"
+    spacing="0">
+    <Panel padding="0 0 10 10">
+      <Text class="large" color="grey" text="After all players are seated:"/>
+    </Panel>
+    <Panel padding="150 150 0 0">
+      <Button id="startButton" onClick="startGameBtn"
+        fontSize="20" text="Start"/>
+    </Panel>
+    <Panel padding="0 0 40 0">
+      <Text class="medium" color="grey" text="Game options:"/>
+    </Panel>
+    <Panel padding="100 100 0 60">
+      <VerticalLayout allowDragging="false"
+        spacing="1" rectAlignment="Center" offsetXY="0 0">
+        <Toggle class="Options" id="opt_use_auction" text="  Auction starting characters" />
+        <Toggle class="Options" id="opt_verbose" text="  Verbose game messages" />
+      </VerticalLayout>
+    </Panel>
+  </VerticalLayout>
+</Panel>
+
+
+<Panel id="statusPanel" active="false"
+  raycastTarget="false"
+  width="320" height="370"
+  offsetXY="-750 350"
+  allowDragging="true"
+  returnToOriginalPositionWhenReleased="false"
+  color="rgba(0,0,0,0)"
+  rectAlignment="MiddleCenter">
+  <TableLayout id="Status_table" class="StatusTable"
+    autoCalculateHeight="true"
+    useGlobalCellPadding="false"
+    padding="0 0 0 0"
+    color="rgba(0,0,0,0)"
+    raycastTarget="true">
+    <Row
+      preferredHeight="40"
+      color="rgba(0,0,0,0)" >
+      <Cell>
+        <Panel id="status_title" image="Sprites/Layout/Title" color="#003699" onClick="statusClick">
+          <Text class="medium" color="rgb(0.8,0.8,0.8)" text="City Scoring Status"/>
+        </Panel>
+      </Cell>
+    </Row>
+    <Row id="status_info" preferredHeight="240">
+      <Cell>
+        <Panel color="#00091a" >
+          <TableLayout id="status_table" columnWidths="100 40 36" color="rgba(0,0,0,0)">
+            <Row id="status_header_row">
+              <Cell/>
+              <Cell/>
+              <Cell id="status_h_template"><Text class="medium" color="Gray" text="?"/></Cell>
+            </Row>
+            <Row id="status_row_template">
+              <Cell><Image image="Sprites/Layout/Button" color="#003699">
+                <Text id="status_city_name_template" class="medium" color="rgb(0.8,0.8,0.8)" text=""/>
+              </Image></Cell>
+              <Cell padding=" 10 3 3"><Image id="status_city_image_template" image="" preserveAspect="true"/></Cell>
+              <Cell id="status_p_template"><Text id="status_p_text_template" class="medium" text="?"/></Cell>
+            </Row>
+          </TableLayout>
+        </Panel>
+      </Cell>
+    </Row>
+  </TableLayout>
+</Panel>
+
 </XmlLayout>

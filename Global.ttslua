@@ -12,6 +12,7 @@
 		-- Yogi extra action functionality
 		-- turn execution, detection and update dial actions
 		-- move architect route detection, display
+		-- respect verbosity setting
 
 		probablyi a bunch more I'm not thinking of!z
 
@@ -28,8 +29,8 @@ env.test.auto_switch = true
 -- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
--- env.test.players = {"Green","Red",}
-env.test.players = {"Green","Red","Blue"}
+env.test.players = {"Green","Red",}
+-- env.test.players = {"Green","Red","Blue"}
 -- env.test.players = {"Red","Green","Purple",}
 
 env.game = {}
@@ -42,7 +43,6 @@ GD = {}
 TTS Game Load
 ********************************]]
 function onLoad(save_state)
-	if env.test.trace then log("onLoad()") end
 	if env.test.force_fresh_save then saved_data = "" end
 	if not(env.test.in_dev) then
 		getObjectFromGUID(C.board_guid).interactable = false
@@ -63,11 +63,25 @@ function onLoad(save_state)
 		GD.state.global_UI = {}
 		GD.state.board_UI = {}
 		GD.game = {}
-		GD.undo = {}
+		GD.env = {}
+		GD.env.use_auction = false
+		UI.setAttribute("opt_use_auction","isOn",GD.env.use_auction)
+		GD.env.verbose = true
+		UI.setAttribute("opt_verbose","isOn",GD.env.verbose)
 		for _,g in pairs(C.player_pawns) do
 			getObjectFromGUID(g).setLock(true)
 		end
 	end
+	Wait.frames(function() reloadUI(C.board_guid) end,60)
+end
+
+--[[ *****************************
+HACK: reload an object's XML UI
+********************************]]
+function reloadUI(guid)
+	if env.test.trace then log("*** HACK: reloadUI() guid: "..tostring(guid)) end
+	local obj = getObjectFromGUID(guid)
+	if obj ~= nil then obj.UI.setXml(obj.UI.getXml()) end
 end
 
 --[[ *****************************
@@ -119,11 +133,71 @@ function board_UI_setAttribute(id, field, value)
 end
 
 --[[ *****************************
+Randomly assign the 7 Governors to the
+starting positions on the track.
+********************************]]
+function setupGovTrack()
+	local temp = simpleDeepCopy(C.governors)
+	local board = getObjectFromGUID(C.board_guid)
+	local row = 0
+	local ref = 7
+	GD.game.governor_track = {}
+	while #temp > 0 do
+		local i = math.random(#temp)
+		row = row + 1
+		if row > 7 then break end --safety
+		board.UI.setAttribute("gov_"..tostring(row),"image",temp[i].city)
+		table.insert(GD.game.governor_track,{city=temp[i].city,node=temp[i].node,row=row, UI_ref=ref, scoring=false})
+		table.remove(temp,i)
+		ref = ref - 1
+	end
+end
+
+--[[ *****************************
+TODO: Thinking about these
+********************************]]
+function mouseOverCity(arg)
+	log("mouse over")
+	log(arg)
+end
+function mouseExitCity(arg)
+	log("mouse exit")
+	log(arg)
+end
+function mouseClickCity(arg)
+	log("mouse click city")
+	log(arg)
+end
+
+--[[ *****************************
+Setup: Handler for start game options
+********************************]]
+function startOptionsBtn(player, value, id)
+	if env.test.trace then log("startGameBtn() "..player.color..", "..id..": "..tostring(value)) end
+	local setting = (value == 'True')
+	UI.setAttribute(id, "isOn", setting)
+	if id == "opt_use_auction" then
+		broadcastToAll("Sorry, not yet imlemented")		--TODO: remove this when imlpemented
+		UI.setAttribute(id, "isOn", false)
+		return
+		-- GD.env.use_auction = setting
+	elseif id == "opt_verbose" then
+		GD.env.verbose = setting
+	else
+		log("*** ERROR: startOptionsBtn() unknown id "..tostring(id))
+	end
+end
+
+--[[ *****************************
 Setup: A player clicked start game.
-TODO: implement UI
 ********************************]]
 function startGameBtn(player, btn, id)
-	if env.test.trace then log("startGameBtn()") end
+	if env.test.trace then log("startGameBtn() "..player.color) end
+	if not(env.test.players) and #getSeatedPlayers() < 2 then
+		broadcastToAll("At least 2 players needed to play")
+		return
+	end
+	UI.setAttribute("startPanel","active",false)
 	startGame()
 end
 
@@ -134,6 +208,7 @@ function startGame()
 	if env.test.trace then log("startGame()") end
 	GD.game.stage = "setup"
 	GD.game.auction_characters = false --TODO: get this from start dialog
+	setupGovTrack()
 	setupNetwork()
 	if not(setupPlayers()) then
 		--TODO: anything?
@@ -141,6 +216,8 @@ function startGame()
 	end
 
 	--TODO: any more game start stuff???
+		setupStatusPanel()
+		UI.setAttribute("statusPanel","active","true")
 
 	--for testing, set development player to start player color
 	local players = Player.getPlayers()
@@ -149,6 +226,83 @@ function startGame()
 			Player[players[1].color].changeColor(GD.game.current_player_color)
 		end
 	end
+end
+
+--[[ *****************************
+Setup: setup the status UI for number of players
+Assumes GD.game.player_order is established.
+********************************]]
+function setupStatusPanel()
+	if env.test.trace then log("setupStatusPanel()") end
+	local letters = {Yellow="Y",Red="R",Green="G",Blue="B",Purple="P",}
+	local xml=UI.getXmlTable()
+	local status_panel = getXmlElement("statusPanel",xml)
+	local status_table = getXmlElement("status_table",status_panel)
+	local columnWidths="100 40"
+	local panel_width = 140
+
+	--setup the header row
+	local index = 3
+	local player_columns = {}
+	local header_row = getXmlElement("status_header_row",status_table)
+	local header_cell = getXmlElement("status_h_template",header_row)
+	for pcol,initial in pairs(letters) do
+		if contains(GD.game.player_order,pcol) then
+			table.insert(player_columns, pcol)
+			local cell = simpleDeepCopy(header_cell)
+			cell.id = "status_h_"..pcol
+			local text = cell.children[1]
+			text.attributes.id = "status_h_txt_"..pcol
+			text.attributes.color = pcol
+			text.attributes.text = initial
+			header_row.children[index] = cell
+			columnWidths = columnWidths.." 36"
+			panel_width = panel_width + 36
+			index = index + 1
+		end
+	end
+
+	--setup the city rows
+	--TODO: highlight city being scored this round
+	local city_row = getXmlElement("status_row_template",status_table)
+	local temp_row = simpleDeepCopy(city_row)
+	local player_cell = getXmlElement("status_p_template",temp_row)
+	status_table.children[2] = nil --wipe out the template so it can be replaced
+	for i,gov in ipairs(GD.game.governor_track) do
+		local row = simpleDeepCopy(temp_row)
+		-- local ref = 7+1-i
+		local ref = gov.UI_ref
+		log("creating row for child "..tostring(ref))
+		row.attributes.id = "status_row_"..tostring(ref)
+		local text = getXmlElement("status_city_name_template",row)
+		text.attributes.id = "status_city_name_"..tostring(ref)
+		text.attributes.text = gov.city
+		local image = getXmlElement("status_city_image_template",row)
+		image.attributes.id = "status_city_image_"..tostring(ref)
+		image.attributes.image = gov.city
+		for p,pcol in ipairs(player_columns) do
+			local pcell = simpleDeepCopy(player_cell)
+			local ptext = getXmlElement("status_p_text_template",pcell)
+			ptext.attributes.id = "status_p_text_"..tostring(ref).."_"..pcol
+			ptext.attributes.text = ""
+			row.children[2+p] = pcell
+		end
+		table.insert(status_table.children,2,row) --always next after header, pushing rest downward
+	end
+	if env.test.debug then
+		log("status table")
+		-- log(status_table.children)
+		for i,c in ipairs(status_table.children) do
+			if i > 1 then
+				log(tostring(i)..": id:"..c.attributes.id)
+				log(c.children[2].children[1].attributes)
+			end
+		end
+	end
+	--reload the xml UI
+	status_panel.attributes.width = tostring(panel_width)
+	status_table.attributes.columnWidths = columnWidths
+	UI.setXmlTable(xml)
 end
 
 --[[ *****************************
@@ -226,9 +380,9 @@ function coroFillPlayerBoards()
 		end
 	end
 	local house = getObjectFromGUID(C.house_object_guid)
-	assert(house, "ERROR: coroFillPlayerBoards(): no house object")
+	assert(house, "*** ERROR: coroFillPlayerBoards(): no house object")
 	local palace = getObjectFromGUID(C.palace_object_guid)
-	assert(palace, "ERROR: coroFillPlayerBoards(): no palace object")
+	assert(palace, "*** ERROR: coroFillPlayerBoards(): no palace object")
 
 	--remove unused player area objects
 	local board = getObjectFromGUID(C.board_guid)
@@ -246,7 +400,7 @@ function coroFillPlayerBoards()
 				local pos = board.positionToWorld(GD.network[city.node].center - C.city_palace_offsets[index])
 				local p = {position=pos}
 				local obj = paste(p)[1]
-				assert(obj, "ERROR: coroFillPlayerBoards(): failed to paste object")
+				assert(obj, "*** ERROR: coroFillPlayerBoards(): failed to paste object")
 				obj.setRotation(rot)
 				obj.setColorTint(C.object_color_tints[pcol])
 				obj.setName("Unused")
@@ -262,7 +416,7 @@ function coroFillPlayerBoards()
 	for _,pcol in ipairs(GD.game.player_order) do
 		local player = GD.game.players[pcol]
 		local player_board = getObjectFromGUID(C.player_boards[pcol])
-		assert(player_board, "ERROR: coroFillPlayerBoards(): no board object")
+		assert(player_board, "*** ERROR: coroFillPlayerBoards(): no board object")
 		local rot = player_board.getRotation()
 		copy({palace})
 		for i,loc in ipairs(C.player_board_palace_locations) do
@@ -387,7 +541,7 @@ function onObjectDrop(pcol, obj)
 			handlePalaceDrop(pcol, obj)
 		end
 	else
-		log("WARN: onObjectDrop() unknown object "..obj.getGUID())
+		log("*** WARN: onObjectDrop() unknown object "..obj.getGUID())
 		return
 	end
 end
@@ -531,7 +685,7 @@ Remove an object from player board data.
 function removeFromPlayerBoard(obj)
 	if env.test.trace then log("removeFromPlayerBoard()") end
 	local player = GD.game.players[obj.getName()]
-	assert(player,"ERROR: removeFromPlayerBoard() could not locate player data")
+	assert(player,"*** ERROR: removeFromPlayerBoard() could not locate player data")
 	if obj.memo == "palace" then
 		for i,data in ipairs(player.palaces) do
 			if data.g == obj.getGUID() then
@@ -549,7 +703,7 @@ function removeFromPlayerBoard(obj)
 			end
 		end
 	end
-	log("WARN: could not find object "..obj.getGUID().." in "..obj.getName().." data")
+	log("*** WARN: could not find object "..obj.getGUID().." in "..obj.getName().." data")
 end
 
 --[[ *****************************
@@ -695,7 +849,7 @@ function getCharacterId(guid)
 			return id
 		end
 	end
-	log("ERROR: getCharacterId(): no character card found for guid "..tostring(guid))
+	log("*** ERROR: getCharacterId(): no character card found for guid "..tostring(guid))
 	return -1
 end
 
@@ -744,7 +898,7 @@ function playerBoardClick(player, btn, id)
 	elseif action == "extraAction" then
 		extraAction(player.color)
 	else
-		log("ERROR: playerBoardClick(): unknown action id")
+		log("*** ERROR: playerBoardClick(): unknown action id")
 		return
 	end
 end
@@ -785,7 +939,7 @@ function updatePlayerActionSelection(params)
 			player_board.call("setState",{done=true})
 		end
 	else
-		log("ERROR: unknown command parameter: "..tostring(params.command))
+		log("*** ERROR: unknown command parameter: "..tostring(params.command))
 		return
 	end
 end
@@ -811,7 +965,7 @@ function playerDone(pcol)
 			if action.dial_pointer == "pointer-2" then p2 = true end
 		end
 		if not(p1 and p2) then
-			lob("WARN: playerDone() two player action selections have not been made")
+			lob("*** WARN: playerDone() two player action selections have not been made")
 			return
 		end
 		GD.game.players[pcol].actions_set = true
@@ -838,7 +992,7 @@ function playerDone(pcol)
 	else
 		--handle "Done" during other game stages, finalize player's plending actions
 		if #GD.game.players[pcol].pending_actions == 0 then
-			log("WARN: playerDone() no actions to finaalize for player "..pcol)
+			log("*** WARN: playerDone() no actions to finaalize for player "..pcol)
 			return
 		end
 		while #GD.game.players[pcol].pending_actions > 0 do
@@ -849,7 +1003,7 @@ function playerDone(pcol)
 			elseif action.key == "initial_placement" then
 				setInitialPlacement(action)
 			else
-				log("ERROR: playerDone() unknown action key "..tostring(action.key))
+				log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 				return
 			end
 			table.remove(GD.game.players[pcol].pending_actions, index)
@@ -864,7 +1018,7 @@ Player has clicked "Done"
 function setStartingCharacter(action)
 	if env.test.trace then log("setStartingCharacter()") end
 	if GD.game.stage ~= "select_starting_characters" then
-		log(("ERROR: setStartingCharacter() invalid game stage")) --shouldn't happen
+		log(("*** ERROR: setStartingCharacter() invalid game stage")) --shouldn't happen
 		return
 	end
 	local pcol = action.player_color
@@ -901,7 +1055,7 @@ Player has clicked "Done"
 function setInitialPlacement(action)
 	if env.test.trace then log("setInitialPlacement()") end
 	if GD.game.stage ~= "initial_placement" then
-		log(("ERROR: setInitialPlacement() invalid game stage")) --shouldn't happen
+		log(("*** ERROR: setInitialPlacement() invalid game stage")) --shouldn't happen
 		return
 	end
 	local obj = getObjectFromGUID(action.guid)
@@ -964,10 +1118,10 @@ function playerUndo(pcol)
 		elseif node.houses[2] and node.houses[2].g == action.guid then
 			node.houses[2] = nil
 		else
-			log("WARN: playerUndo() unable to clear house "..action.guid.."from network node")
+			log("*** ERROR: playerUndo() unable to clear house "..action.guid.."from network node "..tostring(action.undo.node_index))
 		end
 	else
-		log("ERROR: playerDone() unknown action key "..tostring(action.key))
+		log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 		return
 	end
 	--remove entry and update player board UI
@@ -988,6 +1142,34 @@ function extraAction(pcol)
 
 end
 
+
+--[[ *****************************
+Toggle the city status display
+TODO: implement
+********************************]]
+function statusClick(player, btn, id)
+	log("statusClick() id: "..tostring(id))
+
+	--TODO: convert this to hide from/show to player who clicked
+	if not(GD.game.players[player.color].status_panel) then
+		--TODO: show to player
+		log("TODO: show to player")
+
+		GD.game.players[player.color].status_panel = true
+	else
+		--TODO: hide from player
+		log("TODO: hide from player")
+
+		GD.game.players[player.color].status_panel = false
+	end
+
+	-- if toboolean(UI.getAttribute("status_info", "active")) then
+	-- 	UI.setAttribute("status_info","active", false)
+	-- else
+	-- 	UI.setAttribute("status_info","active", true)
+	-- end
+end
+
 --[[ *****************************
 TODO: document
 ********************************]]
@@ -998,7 +1180,7 @@ function startingQuarry(pcol)
 	for i=1,6 do
 		local index = 16 - i + 1
 		local house = getObjectFromGUID(quarry[index].g)
-		assert(house,"ERROR: startingQuarry() nil quarry house")
+		assert(house,"*** ERROR: startingQuarry() nil quarry house")
 		house.setPosition(pool[i].p)
 		quarry[index].g = nil
 		pool[i].g = house.getGUID()

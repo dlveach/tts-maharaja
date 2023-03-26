@@ -63,6 +63,7 @@ function onLoad(save_state)
 		GD.state.global_UI = {}
 		GD.state.board_UI = {}
 		GD.game = {}
+		GD.game.stage = "setup"
 		GD.env = {}
 		GD.env.use_auction = false
 		UI.setAttribute("opt_use_auction","isOn",GD.env.use_auction)
@@ -72,7 +73,7 @@ function onLoad(save_state)
 			getObjectFromGUID(g).setLock(true)
 		end
 	end
-	Wait.frames(function() reloadUI(C.board_guid) end,60)
+	Wait.time(function() reloadUI(C.board_guid) end,5)
 end
 
 --[[ *****************************
@@ -102,11 +103,20 @@ TODO: implement
 function restoreGameState()
 	if env.test.trace then log("restoreGameState()") end
 	log("TODO: restoreGameState()")
-
 	--TODO: TEST THIS: rebuild the status display XML
-	setupStatusPanel()
-	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
+	if GD.game.stage ~= "setup" then
+		setupStatusPanel()
+		updateGovernorTrack()
+		updateStatusPanel()
+	end
 
+	--TODO: replay global UI setattributes
+
+	--TODO: replay board UI setattributes
+
+	--NOTE: UI restore for all dials handled in dial onLoad()
+
+	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
 end
 
 --[[ ******************************
@@ -138,23 +148,50 @@ function board_UI_setAttribute(id, field, value)
 end
 
 --[[ *****************************
-Randomly assign the 7 Governors to the
-starting positions on the track.
+Randomly assign the 7 Governors to starting positions on the track.
 ********************************]]
-function setupGovTrack()
+function setupGovernorTrack()
+	if env.test.trace then log("setupGovernorTrack()") end
 	local temp = simpleDeepCopy(C.governors)
-	local board = getObjectFromGUID(C.board_guid)
 	local row = 0
 	local ref = 7
 	GD.game.governor_track = {}
 	while #temp > 0 do
 		local i = math.random(#temp)
 		row = row + 1
-		if row > 7 then break end --safety
-		board.UI.setAttribute("gov_"..tostring(row),"image",temp[i].city)
-		table.insert(GD.game.governor_track,{city=temp[i].city,node=temp[i].node,row=row, UI_ref=ref, scoring=false})
+		if row > 7 then
+			log("*** ERROR: setupGovernorTrack() exceeded safety stop, too many rows")
+			return
+		end --safety
+		table.insert(GD.game.governor_track,{city=temp[i].city,node=temp[i].node,track_row=row, UI_row=ref, scoring=false})
 		table.remove(temp,i)
 		ref = ref - 1
+	end
+	updateGovernorTrack()
+end
+
+--[[ *****************************
+Update the board UI with Governor images on the track.
+Assumes governor track data has been initialized.
+********************************]]
+function updateGovernorTrack()
+	if env.test.trace then log("updateGovernorTrack()") end
+	--set the governor images per gov track data table
+	local board = getObjectFromGUID(C.board_guid)
+	local filled = {}
+	for i,entry in ipairs(GD.game.governor_track) do
+		board.UI.setAttribute("gov_"..tostring(entry.track_row),"image",entry.city)
+		table.insert(filled,entry.track_row)
+	end
+	--set remaining empty track spaces accordingly
+	for row=1,17 do
+		if not(contains(filled,row)) then
+			if row > 7 then
+				board.UI.setAttribute("gov_"..tostring(row),"image","Gray-"..(row-7))
+			else
+				board.UI.setAttribute("gov_"..tostring(row),"image","Gray")
+			end
+		end
 	end
 end
 
@@ -211,9 +248,9 @@ Setup: initialize the game
 ********************************]]
 function startGame()
 	if env.test.trace then log("startGame()") end
-	GD.game.stage = "setup"
+	-- GD.game.stage = "setup"
 	GD.game.auction_characters = false --TODO: get this from start dialog
-	setupGovTrack()
+	setupGovernorTrack()
 	setupNetwork()
 	if not(setupPlayers()) then
 		--TODO: anything?
@@ -254,7 +291,7 @@ function setupStatusPanel()
 		if contains(GD.game.player_order,pcol) then
 			table.insert(player_columns, pcol)
 			local cell = simpleDeepCopy(header_cell)
-			cell.id = "status_h_"..pcol
+			cell.attributes.id = "status_h_"..pcol
 			local text = cell.children[1]
 			text.attributes.id = "status_h_txt_"..pcol
 			text.attributes.color = pcol
@@ -272,7 +309,7 @@ function setupStatusPanel()
 	status_table.children[2] = nil --wipe out the template so it can be replaced
 	for i,gov in ipairs(GD.game.governor_track) do
 		local row = simpleDeepCopy(temp_row)
-		local ref = gov.UI_ref
+		local ref = gov.UI_row
 		log("creating row for child "..tostring(ref))
 		row.attributes.id = "status_row_"..tostring(ref)
 		local text = getXmlElement("status_city_name_template",row)
@@ -515,7 +552,14 @@ TODO: disable DEVELOPMENT stuff
 ********************************]]
 function onObjectDrop(pcol, obj)
 	if env.test.trace then log("onObjectDrop(): pcol "..pcol..", obj "..obj.getGUID()) end
-	if not(GD.game.stage) then return end
+	if env.test.save_positions then
+		str = "Global: "
+		str = str .. tostring(obj.getPosition())
+		str = str .. "\nBoard: "
+		str = str .. tostring(getObjectFromGUID(C.board_guid).positionToLocal(obj.getPosition()))
+		Notes.setNotes(str)
+	end
+	if GD.game.stage == "setup" then return end
 	local type = obj.memo
 	obj.setVelocity(Vector(0,0,0)) --in case player "throws it"
 	if type == "character" then
@@ -1209,8 +1253,57 @@ function setGovernorButtons(on)
 	Wait.frames(function() reloadUI(C.board_guid) end, 60)
 end
 
+--[[ *****************************
+TODO: implement and document
+********************************]]
 function governorClick(player, btn, id)
 	if env.test.trace then log("governorClick() "..player.color..", id: "..tostring(id)) end
+	-- validate correct player
+	-- store current order in undo
+	-- move down two (or one or zero) spots in track table
+	-- update city status UI
+end
+
+--[[ *****************************
+TODO: implement and document
+********************************]]
+function moveMaharaja()
+	if env.test.trace then log("moveMaharaja()") end
+	-- move maha to next city position (1st in gov track table)
+	local board = getObjectFromGUID(C.board_guid)
+	local track = GD.game.governor_track
+	local city = track[1].city
+	local pos = board.positionToWorld(C.cities[city].maharaja_pos)
+	local maha = getObjectFromGUID(C.maharaja_guid)
+	maha.setLock(false)
+	maha.setPositionSmooth(pos, false, true)
+	Wait.condition(function() maha.setLock(true) end, function() return(maha.resting) end, 2)
+	-- move table 1st to 7th, shift others up
+	local temp = simpleDeepCopy(track[1])
+	temp.UI_row = track[7].UI_row
+	temp.track_row = track[7].track_row + 1
+	for i=2,7 do
+		track[i-1] = simpleDeepCopy(track[i])
+		track[i-1].UI_row = track[i-1].UI_row + 1
+	end
+	track[7] = temp
+	-- update city status UI
+	updateGovernorTrack()
+	updateStatusPanel()
+end
+
+--[[ *****************************
+TODO: implement and document
+********************************]]
+function updateStatusPanel()
+	if env.test.trace then log("updateStatusPanel()") end
+	--update city names and images from GD.game.governor_track
+	for i,gov in ipairs(GD.game.governor_track) do
+		UI.setAttribute("status_city_name_"..gov.UI_row, "text", gov.city)
+		UI.setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
+	end
+	--update player scores per city
+	log("TODO: update status panel UI with player city scores")
 
 end
 

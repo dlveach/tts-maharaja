@@ -124,9 +124,9 @@ end
 TTS save function
 ********************************]]
 function onSave()
-  local saved_data = JSON.encode(GD)
-  if env.test.force_fresh_save then
-    saved_data = ""
+  local saved_data = ""
+  if not(env.test.force_fresh_save) then
+    saved_data = JSON.encode(GD)
   end
   return saved_data
 end

@@ -107,13 +107,13 @@ C.characters = {
 }
 
 C.cities = {
-  Bikaner = {node=1, character=6},
-  Jaipur = {node=4, character=7},
-  Delhi = {node=7, character=5},
-  Jodupur = {node=18, character=4},
-  Agra = {node=20, character=3},
-  Ahaadabad = {node=30, character=1},
-  Khajuraho = {node=35, character=2},
+  Bikaner = {node=1, character=6, maharaja_pos=Vector( 0.739436, 1.5, -0.601276 ),},
+  Jaipur = {node=4, character=7, maharaja_pos=Vector(-0.19306, 1.5, -0.430302),},
+  Delhi = {node=7, character=5, maharaja_pos=Vector(-0.653244, 1.5, -0.548886),},
+  Jodupur = {node=18, character=4, maharaja_pos=Vector(0.953704, 1.5, 0.109871),},
+  Agra = {node=20, character=3, maharaja_pos=Vector(-0.847647, 1.5, 0.122426),},
+  Ahaadabad = {node=30, character=1, maharaja_pos=Vector(0.700924, 1.5, 0.761601),},
+  Khajuraho = {node=35, character=2, maharaja_pos=Vector(-0.631103, 1.5, 0.811526),},
 }
 
 C.governors = {

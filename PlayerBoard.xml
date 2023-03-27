@@ -51,18 +51,18 @@
 
 </Defaults>
 
-<Panel id="infoPanel" class="infoPanel">
+<Panel id="info_pnl" class="infoPanel">
   <TableLayout columnWidths="100 70 0">
     <Row preferredHeight="100">
       <Cell padding="10 10 5 15">
         <Panel color="Blue" image="Sprites/Layout/Base">
-          <Text id="turnOrder" fontSize="60" color="rgb(1,1,0)" text="0" />
+          <Text id="turn_order" fontSize="60" color="rgb(1,1,0)" text="-" />
         </Panel>
       </Cell>
       <Cell padding="65 0 0 0" columnSpan="2">
-        <Panel id="helpTextPanel" class="helpPanel">
+        <Panel id="help_txt_pnl" class="helpPanel">
           <Panel color="#031427">
-            <Text id="helpText" fontSize="14" color="rgb(0.8,0.8,0.8)">
+            <Text id="help_txt" fontSize="14" color="rgb(0.8,0.8,0.8)">
               This is a some help text that will be shown to the player.
               Intended to be instructions and other relevant info.
               Can have a third line.
@@ -76,38 +76,38 @@
       </Cell>
       <Cell>
         <TableLayout columnWidths="100 0 100">
-          <Row preferredHeight="60">
-            <Cell padding="15 5 10 10">
-              <Panel id="doneBtnPanel">
+          <Row preferredHeight="90">
+            <Cell padding="15 5 10 40">
+              <Panel id="done_btn_pnl">
                 <Button id="done_btn">
                   <Text fontSize="18" text="Done" />
                 </Button>
               </Panel>
             </Cell>
             <Cell padding="0 0 0 0">
-              <Panel id="extraActionsPanel">
-                <TableLayout columnWidths="40 60 60 40 0" >
+              <Panel id="extra_actions_pnl">
+                <TableLayout columnWidths="10 90 20 90 0" >
                   <Row>
                     <Cell/>
                     <Cell padding="0 0 0 0">
-                      <Text fontSize="16">
-                        Extra
-                        Actions
-                      </Text>
+                      <!--Image id="extraAction_btn" image="action_token" onClick="Global/playerBoardClick" -->
+                      <Image id="extraAction_btn" image="action_token">
+                        <Text id="extra_actions_txt" fontSize="26" text="-"/>
+                      </Image>
                     </Cell>
-                    <Cell padding="0 0 0 0">
-                      <Image id="extraAction_btn" image="action_token" onClick="Global/playerBoardClick" />
-                    </Cell>
-                    <Cell padding="0 20 0 0">
-                      <Text id="extraActionsText" fontSize="20" text="0"/>
+                    <Cell/>
+                    <Cell padding="3 3 3 3">
+                      <Image id="gold_img" image="gold_coin" >
+                        <Text id="gold_coins_txt" fontSize="26" text="-"/>
+                      </Image>
                     </Cell>
                     <Cell/>
                   </Row>
                 </TableLayout>
               </Panel>
             </Cell>
-            <Cell padding="5 15 10 10">
-              <Panel id="undoBtnPanel">
+            <Cell padding="5 15 10 40">
+              <Panel id="undo_btn_pnl">
                 <Button id="undo_btn">
                   <Text fontSize="18" text="Undo" />
                 </Button>

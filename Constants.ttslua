@@ -194,10 +194,13 @@ C.player_data = {
   placed_palaces = {},
   placed_houses = {},
   actions = {},
+  gold = 0,
+  extra_actions = 0,
   character_id = -1,
   has_actions = false,
   free_actions = {},
   pending_actions = {},
   dial_actions = {},
   status_panel = true,
+  pawn_location = {},
 }

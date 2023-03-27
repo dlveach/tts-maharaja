@@ -190,6 +190,7 @@ function setState(params)
     self.UI.setAttribute("back_button_panel","active",false)
     if not(GD.state.flipped) then flipMe() end
     GD.state.stage = "actions_locked"
+    showMe()
   elseif params.state =="extra_action" then
     GD.state.stage = "extra_action"
     enableDialButtons()
@@ -197,10 +198,10 @@ function setState(params)
     if GD.state.flipped then flipMe() end
   elseif params.state == "player_turn" then
     GD.state.stage = "player_turn"
+    log("flipped state = "..tostring(GD.state.flipped))
     self.UI.setAttribute("back_button_panel","active",false)
     self.UI.setAttribute("player_actions_panel","visibility","")
     disableDialButtons()
-    if GD.state.flipped then flipMe() end
     showMe()
   elseif params.state == "game_start" then
     if not(GD.state.flipped) then flipMe() end
@@ -353,11 +354,11 @@ function flipMe()
     --turn display off before flipping to avoid weird UI movement
     self.UI.setAttribute("player_actions_panel","active",false)
   end
+  GD.state.flipped = not(GD.state.flipped)
   self.setLock(false)
   self.flip()
   Wait.condition(function()
     self.setLock(true)
-    GD.state.flipped = self.is_face_down
     self.UI.setAttribute("player_actions_panel","active",not(GD.state.flipped))
   end, function() return self.resting end, 3)
 end

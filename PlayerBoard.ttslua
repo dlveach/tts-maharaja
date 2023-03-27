@@ -5,6 +5,19 @@ Maharaja player board
 
 env={}
 
+UI_TEST = false
+
+BUTTON_PARAMS = {
+  click_function="extraActionClick",
+  function_owner=Global,
+  position={-0.55,0,-1.25},
+  rotation={0,0,0},
+  height=250,
+  width=250,
+  color={0,0,0,0},
+  tooltip="Use Extra Action",
+}
+
 --[[ *****************************
 TTS Game Load and restore state if saved.
 ********************************]]
@@ -26,9 +39,16 @@ function onLoad(save_state)
     GD.state.undo = false
     GD.state.turn_order = 0
     GD.state.extra_actions = 0
+    GD.state.gold_coins = 0
     GD.state.help_text = ""
   end
   updateUI()
+  if UI_TEST then
+    self.UI.setAttribute("infoPanel","active", true)
+    self.UI.setAttribute("doneBtnPanel","active", true)
+    self.UI.setAttribute("undoBtnPanel","active", true)
+    self.UI.setAttribute("helpTextPanel","active", true)
+  end
 end
 
 --[[ *****************************
@@ -48,22 +68,29 @@ Update the UI to the current board (object) state.
 function updateUI()
   if env.test.debug then log(gid.."updateUI()") end
   if GD.state.dormant then
-    self.UI.setAttribute("infoPanel","active", false)
+    self.UI.setAttribute("info_pnl","active", false)
   else
-    self.UI.setAttribute("infoPanel","active", true)
+    self.UI.setAttribute("info_pnl","active", true)
     if GD.state.turn_order > 0 then
-      self.UI.setAttribute("turnOrder","text", tostring(GD.state.turn_order))
+      self.UI.setAttribute("turn_order","text", tostring(GD.state.turn_order))
     else
-      self.UI.setAttribute("turnOrder","text","?")
+      self.UI.setAttribute("turn_order","text","?")
     end
-    self.UI.setAttribute("doneBtnPanel","active", GD.state.active_player and GD.state.done)
-    self.UI.setAttribute("undoBtnPanel","active", GD.state.active_player and GD.state.undo)
-    self.UI.setAttribute("extraActionsPanel","active", GD.state.extra_actions > 0)
-    self.UI.setAttribute("extraActionsText","text",tostring(GD.state.extra_actions))
+    self.UI.setAttribute("done_btn_pnl","active", GD.state.active_player and GD.state.done)
+    self.UI.setAttribute("undo_btn_pnl","active", GD.state.active_player and GD.state.undo)
+    self.UI.setAttribute("extra_actions_txt","text",tostring(GD.state.extra_actions))
+    self.UI.setAttribute("gold_coins_txt","text",tostring(GD.state.gold_coins))
     if env.game.use_help then
-      self.UI.setAttribute("helpText","text", GD.state.help_text)
-      self.UI.setAttribute("helpTextPanel","active", GD.state.active_player)
+      self.UI.setAttribute("help_txt","text", GD.state.help_text)
+      self.UI.setAttribute("help_txt_pnl","active", GD.state.active_player)
     end
+  end
+  if GD.state.active_player and GD.state.extra_actions > 0 then
+    if self.getButtons() == nil then
+      self.createButton(BUTTON_PARAMS)
+    end
+  else
+    self.clearButtons()
   end
 end
 
@@ -88,6 +115,7 @@ function setState(params)
     if params.undo != nil then GD.state.undo = params.undo end
     if params.turn_order != nil then GD.state.turn_order = params.turn_order end
     if params.extra_actions != nil then GD.state.extra_actions = params.extra_actions end
+    if params.gold_coins != nil then GD.state.gold_coins = params.gold_coins end
     if params.help_text != nil then GD.state.help_text = params.help_text end
   else
     --defaults to non-active player if no params supplied

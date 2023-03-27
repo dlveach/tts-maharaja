@@ -18,6 +18,13 @@ g_pointer = {
   rotation = Vector(90, 180, 0),
   scale = Vector(2,2,1),
 }
+g_extra_pointer = {
+  name = "pointer-extra",
+  url = "http://cloud-3.steamusercontent.com/ugc/2019341512250290332/123CEA34583ED4E97E4616055B24ED7AC7D2A982/",
+  position = Vector(0.01,0.1,-0.05),
+  rotation = Vector(90, 180, 0),
+  scale = Vector(2,2,1),
+}
 g_back_decal = {
   name = "dial_back",
   url = "http://cloud-3.steamusercontent.com/ugc/2019340792119743844/FBF1CD3789663DD96F5C9D218ED931973551A259/",
@@ -57,6 +64,9 @@ g_player_colors = {"Yellow","Red","Green","Blue","Purple"}
  	["house"] = {
     {id="house",label="Build a House (City/Village)",},
   },
+  ["free"] = {
+    {id="free-build-move",label="Free Build/Move House (City/Village)",},
+  },
 }
 
 env = {}
@@ -69,6 +79,7 @@ function onLoad(save_state)
   GD.color = self.getName()
   gid = GD.color.."_dial"
   env = Global.getTable("env")
+  assert(env, "*** ERROR: no env from Global")
   if save_state ~= "" then
     if env.test.trace then log(gid..": onLoad(): Loading from saved state") end
     local restore_data = JSON.decode(saved_data)
@@ -125,7 +136,7 @@ TTS save function
 ********************************]]
 function onSave()
   local saved_data = ""
-  if not(env.test.force_fresh_save) then
+  if env and not(env.test.force_fresh_save) then
     saved_data = JSON.encode(GD)
   end
   return saved_data
@@ -144,10 +155,22 @@ function updateUI()
       self.UI.setAttribute("action_text_"..tostring(i),"text",entry.label)
       self.UI.setAttribute("row_action_"..tostring(i),"active",true)
       self.UI.setAttribute("status_text_"..tostring(i),"text",entry.status)
+      if entry.status == "Done" then
+        self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
+      elseif entry.status =="Incomplete" then
+        self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
+        self.UI.setAttribute("status_text_"..tostring(i), "color", "Red")
+      end
     elseif entry.type == "free" then
-      self.UI.setAttribute("action_text_7","text",action.label)
+      self.UI.setAttribute("action_text_7","text",entry.label)
       self.UI.setAttribute("row_action_7","active",true)
-      self.UI.setAttribute("status_text_7","text",action.status)
+      self.UI.setAttribute("status_text_7","text",entry.status)
+      if entry.status == "Done" then
+        self.UI.setAttribute("action_text_7", "color", "Gray")
+      elseif entry.status =="Incomplete" then
+        self.UI.setAttribute("action_text_7", "color", "Gray")
+        self.UI.setAttribute("status_text_7", "color", "Red")
+      end
     else
       log("***WARN: unknown action entry type: "..tostring(entry.type))
     end
@@ -194,7 +217,9 @@ function setState(params)
   elseif params.state =="extra_action" then
     GD.state.stage = "extra_action"
     enableDialButtons()
+
     --TODO: what about durign player turn?
+
     if GD.state.flipped then flipMe() end
   elseif params.state == "player_turn" then
     GD.state.stage = "player_turn"
@@ -203,10 +228,38 @@ function setState(params)
     self.UI.setAttribute("player_actions_panel","visibility","")
     disableDialButtons()
     showMe()
+    if GD.state.flipped then flipMe() end
   elseif params.state == "game_start" then
     if not(GD.state.flipped) then flipMe() end
     disableDialButtons()
 		showMe()
+  elseif params.state == "free_action" then
+    local entry = {
+      type = "free",
+      action_id = g_actions["free"][1].id,
+      label = g_actions["free"][1].label,
+      status = ""
+    }
+    table.insert(GD.state.actions, entry)
+    updateUI()
+  elseif params.state == "complete_action" then
+    local action_id = params.action_id
+    for _,action in ipairs(GD.state.actions) do
+      if action.action_id == params.action_id then
+        action.status = "Done"
+        updateUI()
+        break
+      end
+    end
+  elseif params.state == "fail_action" then
+    local action_id = params.action_id
+    for _,action in ipairs(GD.state.actions) do
+      if action.action_id == params.action_id then
+        action.status = "Incomplete"
+        updateUI()
+        break
+      end
+    end
   else
     log(gid..": ERROR: setState() unknown state: "..tostring(params.state))
   end

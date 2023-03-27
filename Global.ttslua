@@ -661,6 +661,34 @@ function startingQuarry(pcol)
 end
 
 --[[ *****************************
+Move 2 houses from quarry
+********************************]]
+function quarryAction(pcol)
+	if env.test.trace then log("startingQuarry(): "..pcol) end
+	local player = GD.game.players[pcol]
+	local quarry = player.quarry
+	local pool = player.pool
+	local success = false
+	for i=1,2 do
+		for p=1,12 do
+			if not(pool[p].g) then
+				for q=16,1,-1 do
+					if quarry[q].g then
+						getObjectFromGUID(quarry[q].g).setPosition(pool[p].p)
+						pool[p].g = quarry[q].g
+						quarry[q].g = nil
+						success = true
+						break --out of quarry loop
+					end
+				end
+				break --out of pool loop
+			end
+		end
+	end
+	return success
+end
+
+--[[ *****************************
 Finalize a starting character select action
 Player has clicked "Done"
 ********************************]]
@@ -883,13 +911,74 @@ Start a player's action turn.
 ********************************]]
 function startPlayerTurn(pcol)
 	if env.test.trace then log("startPlayerTurn() for player "..tostring(pcol)) end
-	if GD.game.players[pcol].extra_actions then
-		--TODO: enable extra actions button on player board
-		log("TODO: startPlayerTurn()() enable extra actions button for player "..pcol)
-	end
+	local player = GD.game.players[pcol]
+	assert(player,"Failed to locate player for color "..tostring(pcol))
+	player.failed_actions = false
+	player.pending_actions = {}
+	if GD.env.verbose then printToAll("Starting turn for player "..pcol) end
 	local dial = getObjectFromGUID(C.action_dials[pcol])
 	Wait.condition(function() dial.call("setState",{state="player_turn"}) end,
 		function() return(dial.resting) end, 5) --HACK: might be flipping from lock actions call so wait
+	--unlock pawn
+	getObjectFromGUID(C.player_pawns[pcol]).setLock(false)
+	--set and/or execute bonus of character tile
+	player.character_bonus = nil
+	if player.character_id == 7 then
+		player.extra_actions = player.extra_actions + 1
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{extra_actions=player.extra_actions})
+		if GD.env.verbose then printToAll(pcol.." +1 extra action token for the Yogi") end
+	elseif player.character_id == 6 then
+		if env.test.debug then log("Setting player "..pcol.." discounted palace build cost to 9") end
+		player.character_bonus = "build_palace_discount"
+	elseif player.character_id == 5 then
+		dial.call("setState",{state="free_action"})
+		if env.test.debug then log("Setting player "..pcol.." free Architect travel") end
+		player.character_bonus = "free_build_move"
+	elseif player.character_id == 4 then
+		if env.test.debug then log("Setting player "..pcol.." free Architect travel") end
+		player.character_bonus = "free_travel"
+	elseif player.character_id == 3 then
+		if env.test.debug then log("Setting player "..pcol.." outer palace score == 2") end
+		player.character_bonus = "outer_palace_scoring"
+	elseif player.character_id == 2 then
+		player.gold = player.gold + 1
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+		if GD.env.verbose then printToAll(pcol.." +1 gold for the Trader") end
+	end
+	--execute any immediate actions, set pawn, house, palace lock state based on actions selected
+	for _,action in ipairs(player.dial_actions) do
+		if action.action_id == "gold" then
+			player.gold = player.gold + 2
+			dial.call("setState",{state="complete_action",action_id="gold"})
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+			if GD.env.verbose then printToAll(pcol.." +2 gold for Coins action") end
+		elseif action.action_id == "quarry" then
+			--TODO: immediate quarry action
+			if quarryAction(pcol) then
+				dial.call("setState",{state="complete_action",action_id="quarry"})
+			else
+				dial.call("setState",{state="fail_action",action_id="quarry"})
+				if GD.env.verbose then printToAll(pcol.." is unable to complete selected Quarry action!") end
+				player.failed_actions = true
+			end
+		elseif action.action_id == "palace" then
+			--TODO unlock unplaced palaces
+
+		elseif action.action_id == "house" or action.action_id == "free" then
+			--TODO unlock build pool
+
+		elseif action.action_id == "move" or action.action_id == "free" then
+			--TODO unlock placed houses
+
+		elseif action.action_id == "track" then
+			--TODO enable govoner buttons
+
+		elseif action.action_id == "character" then
+			--TODO unlock character cards (opponents and bank)
+
+		end
+	end
+	--enable player board for actions
 	local txt = "Execute actions in any order.\n"
 	txt = txt.."May move Architect at any time.\n"
 	txt = txt.."All required actions must be executed.\n"
@@ -898,18 +987,6 @@ function startPlayerTurn(pcol)
 		local active = (p == pcol)
 		getObjectFromGUID(C.player_boards[p]).call("setState",{active=active,done=active,undo=false,help_text=txt})
 	end
-
-	--TODO: implement This
-	--unlock pawn
-	getObjectFromGUID(C.player_pawns[pcol]).setLock(false)
-
-	--TODO: unlock houses and palaces (??? only if associated actions?)
-	--TODO: set button on charactar tile if action selected
-	--TODO: execute any per turn immediate actions (action chit, 1 coin)
-	--TODO: set any character bonus/discounts (palace disc, move for free, scoring bonus)
-	--TODO: assign any free action (free build/move)
-
-	--TODO: enable UI for actions
 end
 
 --[[ *****************************
@@ -922,58 +999,96 @@ Process player Done click based on current game stage.
 ********************************]]
 function playerDone(pcol)
 	if env.test.trace then log("playerDone(): "..pcol) end
-	if GD.game.stage == "select_actions" then
-		--handle "Done" by a player during action selection by all players
-		log("Player clicked Done during action selection")
-		--validate at least two pointer selections made.  TODO: not sure this is necessary
-		local p1,p2 = false,false
-		for _,action in ipairs(GD.game.players[pcol].dial_actions) do
-			if action.dial_pointer == "pointer-1" then p1 = true end
-			if action.dial_pointer == "pointer-2" then p2 = true end
-		end
-		if not(p1 and p2) then
-			lob("*** WARN: playerDone() two player action selections have not been made")
-			return
-		end
-		GD.game.players[pcol].actions_set = true
-		--check to see if all players have set actions
-		local all_set = true
-		for _,pdata in pairs(GD.game.players) do
-			if not(pdata.actions_set) then all_set = false end
-		end
-		if all_set then
-			broadcastToAll("All players have set actions, starting player turns")
-			for _,pcol in ipairs(GD.game.player_order) do
-				getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="actions_locked"})
-				getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false,help=false})
+	local player = GD.game.players[pcol]
+	if GD.game.stage == "select_starting_characters" then  --Done during character selection
+		local action = player.pending_actions[1]
+		assert(action,"*** ERROR: missing starting character action")
+		setStartingCharacter(action)
+		if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
+		table.remove(player.pending_actions, 1)
+	elseif GD.game.stage == "initial_placement" then  --Done during initial placement
+		local action = player.pending_actions[1]
+		assert(action,"*** ERROR: missing initial placement action")
+		setInitialPlacement(action)
+		if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
+		table.remove(player.pending_actions, 1)
+	elseif GD.game.stage == "select_actions" then  --Done during action selection
+			if player.choosing_extra_action then
+				setExtraAction(pcol)
+			else
+			log("Player clicked Done during action selection")
+			local p1,p2 = false,false
+			for _,action in ipairs(player.dial_actions) do
+				if action.dial_pointer == "pointer-1" then p1 = true end
+				if action.dial_pointer == "pointer-2" then p2 = true end
 			end
-			GD.game.stage = "player_turns"
-			startPlayerTurn(setNextPlayer(FIRST))
-		else
-			--still players selecting actions, just set state on this player's dial
-			local dial = getObjectFromGUID(C.action_dials[pcol])
-			dial.call("setState",{state="actions_selected",modify=true})
-			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false})
+			if not(p1 and p2) then
+				lob("*** WARN: playerDone() two player action selections have not been made")
+				return
+			end
+			player.actions_set = true
+			local all_set = true
+			for _,pdata in pairs(GD.game.players) do
+				if not(pdata.actions_set) then all_set = false end
+			end
+			if all_set then
+				broadcastToAll("All players have set actions, starting player turns")
+				for _,pcol in ipairs(GD.game.player_order) do
+					getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="actions_locked"})
+					getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false,help=false})
+				end
+				GD.game.stage = "player_turns"
+				startPlayerTurn(setNextPlayer(FIRST))
+			else
+				local dial = getObjectFromGUID(C.action_dials[pcol])
+				dial.call("setState",{state="actions_selected",modify=true})
+				getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false})
+			end
 		end
-	else
-		--handle "Done" during other game stages, finalize player's plending actions
-		if #GD.game.players[pcol].pending_actions == 0 then
-			log("*** WARN: playerDone() no actions to finaalize for player "..pcol)
-			return
+	elseif GD.game.stage == "player_turns" then --Done during other game stages
+		if #player.pending_actions == 0 then
+			log("*** WARN: playerDone() no actions to finalize for player "..pcol)
 		end
-		while #GD.game.players[pcol].pending_actions > 0 do
-			local index = #GD.game.players[pcol].pending_actions
-			local action = GD.game.players[pcol].pending_actions[index]
-			if action.key == "select_starting_character" then
-				setStartingCharacter(action)
-			elseif action.key == "initial_placement" then
-				setInitialPlacement(action)
+		while #player.pending_actions > 0 do
+			local index = #player.pending_actions
+			local action = player.pending_actions[index]
+			-- if action.key == "select_starting_character" then
+			-- 	setStartingCharacter(action)
+			-- elseif action.key == "initial_placement" then
+			-- 	setInitialPlacement(action)
+			if action.key == "track" then
+				log("TODO: finalize track action")
+			elseif action.key == "coins" then
+				--TODO: nothing to do here? coins given at start of turn
+			elseif action.key == "character" then
+				log("TODO: finalize character action")
+			elseif action.key == "palace" then
+				log("TODO: finalize palace action")
+			elseif action.key == "quarry" then
+				log("TODO: finalize quarry action")
+			elseif action.key == "move" then
+				log("TODO: finalize move action")
+			elseif action.key == "house" then
+				log("TODO: finalize house action")
 			else
 				log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 				return
 			end
-			table.remove(GD.game.players[pcol].pending_actions, index)
+			if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
+			table.remove(player.pending_actions, index)
 		end
+		if player.failed_actions then
+			--give other players +2 gold
+			for color,player in pairs(GD.game.players) do
+				if color ~= pcol then
+					player.gold = player.gold + 2
+					getObjectFromGUID(C.player_boards[color]).call("setState",{gold_coins=player.gold})
+					if GD.env.verbose then printToAll(color.." recieves +2 gold") end
+				end
+			end
+		end
+	else
+		log("*** ERROR: unknown game stage")
 	end
 end
 
@@ -1326,7 +1441,7 @@ params:
 ********************************]]
 function updatePlayerActionSelection(params)
 	if env.test.trace then log("updatePlayerActionSelection()") end
-	log(params)
+	if env.test.debug then log(params) end
 	local pcol = params.player_color
 	assert(pcol,"updatePlayerActionSelection(): missing player color")
 	if params.command == "clear" then

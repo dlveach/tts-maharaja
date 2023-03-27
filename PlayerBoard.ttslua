@@ -24,6 +24,7 @@ TTS Game Load and restore state if saved.
 function onLoad(save_state)
   gid = self.getName().."_PlayerBoard:"
   env = Global.getTable("env")
+  assert(env, "*** ERROR: no env from Global")
   GD = {}
   GD.color = self.getName()
   if save_state ~= "" then
@@ -56,7 +57,7 @@ TTS save state function.
 ********************************]]
 function onSave()
   local saved_data = JSON.encode(GD)
-  if env.test.force_fresh_save then
+  if env and env.test.force_fresh_save then
     saved_data = ""
   end
   return saved_data

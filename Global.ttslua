@@ -202,14 +202,53 @@ function startGameBtn(player, btn, id)
 end
 
 --[[ *****************************
-TODO: implement and document
+Player clicked a row on the Governor track
 ********************************]]
 function governorClick(player, btn, id)
 	if env.test.trace then log("governorClick() "..player.color..", id: "..tostring(id)) end
-	-- validate correct player
-	-- store current order in undo
-	-- move down two (or one or zero) spots in track table
-	-- update city status UI
+	if player.color ~= GD.game.current_player_color then return end
+	if GD.game.players[player.color].governor_clicked then return end --guard double clicks
+	GD.game.players[player.color].governor_clicked = true
+	local track = GD.game.governor_track
+	-- build a pending action and store current order in undo
+	local row_clicked = tonumber(Split(id,'_')[2])
+	local action = {
+		key = "governor_track",
+		player_color = pcol,	--TODO: need this?
+		row_clicked = row_clicked,  --TODO: need this?
+		undo = {
+			restore_list = simpleDeepCopy(track),
+		}
+	}
+	table.insert(GD.game.players[player.color].pending_actions, action)
+	--find the data table index for the clicked row
+	local index = -1
+	for i=1,7 do
+		if track[i].track_row == row_clicked then
+			index = i
+			break
+		end
+	end
+	assert(index > 0,"***ERROR: bad track index")
+	-- move down two (or one or zero) spots in track table, shift others up
+	local temp = simpleDeepCopy(track[index])
+	temp.track_row = temp.track_row - 2
+	if temp.track_row < 1 then temp.track_row = 1 end
+	temp.UI_row = temp.UI_row + 2
+	if temp.UI_row > 7 then temp.UI_row = 7 end
+	local new_index = index - 2
+	if new_index < 1 then new_index = 1 end
+	for i = index, new_index+1, -1 do
+		track[i] = simpleDeepCopy(track[i-1])
+		track[i].track_row = track[i-1].track_row + 1
+		track[i].UI_row = track[i-1].UI_row - 1
+	end
+	track[new_index] = temp
+	updateGovernorTrack()
+	updateStatusPanel()
+	governorButtons(false)
+	getObjectFromGUID(C.action_dials[player.color]).call("setState",{state="complete_action",action_id="track"})
+	getObjectFromGUID(C.player_boards[player.color]).call("setState",{undo=true})
 end
 
 --[[ *****************************
@@ -562,6 +601,8 @@ function coroFillPlayerBoards()
 				obj.setColorTint(C.object_color_tints[pcol])
 				obj.setName("Unused")
 				obj.memo = "palace"
+				obj.tooltip = false
+				obj.interactable = false
 				table.insert(GD.network[city.node].palaces, {g=obj.getGUID(), c=pcol, p=pos})
 				pauseMe()
 				Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
@@ -573,7 +614,8 @@ function coroFillPlayerBoards()
 	for _,pcol in ipairs(GD.game.player_order) do
 		local player = GD.game.players[pcol]
 		local player_board = getObjectFromGUID(C.player_boards[pcol])
-		assert(player_board, "*** ERROR: coroFillPlayerBoards(): no board object")
+		assert(player_board, "*** ERROR: coroFillPlayerBoards(): no board object for color "..tostring(pcol))
+		player_board.tooltip = false
 		local rot = player_board.getRotation()
 		copy({palace})
 		for i,loc in ipairs(C.player_board_palace_locations) do
@@ -584,6 +626,7 @@ function coroFillPlayerBoards()
 			obj.setColorTint(C.object_color_tints[pcol])
 			obj.setName(pcol)
 			obj.memo = "palace"
+			obj.setDescription("Palace")
 			table.insert(player.palaces, {g=obj.getGUID(),p=pos})
 			pauseMe()
 			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
@@ -597,6 +640,7 @@ function coroFillPlayerBoards()
 			obj.setColorTint(C.object_color_tints[pcol])
 			obj.setName(pcol)
 			obj.memo = "house"
+			obj.setDescription("House")
 			table.insert(player.quarry, {g=obj.getGUID(),p=pos})
 			pauseMe()
 			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
@@ -608,11 +652,14 @@ function coroFillPlayerBoards()
 			obj.setColorTint(C.object_color_tints[pcol])
 			obj.setName(pcol)
 			obj.memo = "house"
+			obj.setDescription("House")
 			player.pool[i].g = obj.getGUID()
 			pauseMe()
 			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 		end
 		local dial = getObjectFromGUID(C.action_dials[pcol])
+		assert(dial, "*** ERROR: coroFillPlayerBoards(): no dial object for color "..tostring(pcol))
+		dial.tooltip = false
 		dial.call("setState",{state="game_start"})
 	end
 
@@ -763,12 +810,22 @@ end
 --[[/////////// Game Play ///////////////////////]]
 
 --[[ *****************************
-Set the locked state of a player's houses in the build pool
+TODO: document
 ********************************]]
-function setPlayerPoolLock(pcol, locked)
-	locked = locked or false
-	for _,e in ipairs(GD.game.players[pcol].pool) do
-		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+function beginGameRound()
+	if env.test.trace then log("beginGameRound()") end
+	--move maharaja
+	moveMaharaja()
+	--setup players to select actions
+	GD.game.stage = "select_actions"
+	for pcol,pdata in pairs(GD.game.players) do
+		local dial = getObjectFromGUID(C.action_dials[pcol])
+		dial.call("setState",{state="select_actions",reset=true})
+		GD.game.players[pcol].has_actions = true --TODO: move this to "confirm" button?
+		local txt = "Secretly choose turn actions and confirm with Done.\n"
+		txt = txt .. "Player turns will begin once all have confirmed.\n"
+		txt = txt .. "Until then selections can be modified."
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,done=false,undo=false,help_text=txt})
 	end
 end
 
@@ -877,7 +934,6 @@ function houseDrop(pcol, obj)
 			--show done and undo buttons
 			table.insert(GD.game.players[pcol].pending_actions, action)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
-
 		elseif node.type == "city" then
 			snapBack()
 			return
@@ -946,6 +1002,7 @@ function startPlayerTurn(pcol)
 		if GD.env.verbose then printToAll(pcol.." +1 gold for the Trader") end
 	end
 	--execute any immediate actions, set pawn, house, palace lock state based on actions selected
+	local palace,pool,move,track,char = false,false,false,false,false
 	for _,action in ipairs(player.dial_actions) do
 		if action.action_id == "gold" then
 			player.gold = player.gold + 2
@@ -956,28 +1013,24 @@ function startPlayerTurn(pcol)
 			--TODO: immediate quarry action
 			if quarryAction(pcol) then
 				dial.call("setState",{state="complete_action",action_id="quarry"})
+				if GD.env.verbose then printToAll(pcol.." moves 2 houses into their Build Pool") end
 			else
 				dial.call("setState",{state="fail_action",action_id="quarry"})
 				if GD.env.verbose then printToAll(pcol.." is unable to complete selected Quarry action!") end
 				player.failed_actions = true
 			end
-		elseif action.action_id == "palace" then
-			--TODO unlock unplaced palaces
-
-		elseif action.action_id == "house" or action.action_id == "free" then
-			--TODO unlock build pool
-
-		elseif action.action_id == "move" or action.action_id == "free" then
-			--TODO unlock placed houses
-
-		elseif action.action_id == "track" then
-			--TODO enable govoner buttons
-
-		elseif action.action_id == "character" then
-			--TODO unlock character cards (opponents and bank)
-
+		elseif action.action_id == "palace" then palace = true
+		elseif action.action_id == "house" or action.action_id == "free" then pool = true
+		elseif action.action_id == "move" or action.action_id == "free" then move = true
+		elseif action.action_id == "track" then track = true
+		elseif action.action_id == "character" then char = true
 		end
 	end
+	if palace then unplayedPalacesLock(pcol, false) end
+	if pool then buildPoolLock(pcol, false) end
+	if move then placedHousesLock(pcol, false) end
+	if track then governorButtons(true) end
+	if char then charactersLock(pcol, false) end
 	--enable player board for actions
 	local txt = "Execute actions in any order.\n"
 	txt = txt.."May move Architect at any time.\n"
@@ -1052,12 +1105,10 @@ function playerDone(pcol)
 		while #player.pending_actions > 0 do
 			local index = #player.pending_actions
 			local action = player.pending_actions[index]
-			-- if action.key == "select_starting_character" then
-			-- 	setStartingCharacter(action)
-			-- elseif action.key == "initial_placement" then
-			-- 	setInitialPlacement(action)
-			if action.key == "track" then
+			if action.key == "governor_track" then
 				log("TODO: finalize track action")
+				player.governor_clicked = false
+				--TODO: anything else?
 			elseif action.key == "coins" then
 				--TODO: nothing to do here? coins given at start of turn
 			elseif action.key == "character" then
@@ -1065,7 +1116,7 @@ function playerDone(pcol)
 			elseif action.key == "palace" then
 				log("TODO: finalize palace action")
 			elseif action.key == "quarry" then
-				log("TODO: finalize quarry action")
+				--TODO: nothing to do here? quarry executed at start of turn
 			elseif action.key == "move" then
 				log("TODO: finalize move action")
 			elseif action.key == "house" then
@@ -1087,28 +1138,10 @@ function playerDone(pcol)
 				end
 			end
 		end
+		--TODO: check for last player in round, start new round if so
+		--otherwise: startPlayerTurn(setNextPlayer())
 	else
 		log("*** ERROR: unknown game stage")
-	end
-end
-
---[[ *****************************
-TODO: document
-********************************]]
-function beginGameRound()
-	if env.test.trace then log("beginGameRound()") end
-	--move maharaja
-	moveMaharaja()
-	--setup players to select actions
-	GD.game.stage = "select_actions"
-	for pcol,pdata in pairs(GD.game.players) do
-		local dial = getObjectFromGUID(C.action_dials[pcol])
-		dial.call("setState",{state="select_actions",reset=true})
-		GD.game.players[pcol].has_actions = true --TODO: move this to "confirm" button?
-		local txt = "Secretly choose turn actions and confirm with Done.\n"
-		txt = txt .. "Player turns will begin once all have confirmed.\n"
-		txt = txt .. "Until then selections can be modified."
-		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,done=false,undo=false,help_text=txt})
 	end
 end
 
@@ -1122,10 +1155,10 @@ TODO: document
 ********************************]]
 function playerUndo(pcol)
 	if env.test.trace then log("playerUndo(): "..pcol) end
-	local index = #GD.game.players[pcol].pending_actions
-	if index == 0 then return end
-	local action = GD.game.players[pcol].pending_actions[index]
-
+	local actions = GD.game.players[pcol].pending_actions
+	if #actions == 0 then return end
+	local action = actions[#actions]
+	if env.test.debug then log("action to undo:");log(action) end
 	if action.key == "select_starting_character" then
 		local obj = getObjectFromGUID(action.undo.guid)
 		obj.setPosition(action.undo.snapback.pos)
@@ -1144,18 +1177,23 @@ function playerUndo(pcol)
 		else
 			log("*** ERROR: playerUndo() unable to clear house "..action.guid.."from network node "..tostring(action.undo.node_index))
 		end
+	elseif action.key == "governor_track" then
+		log("TESTING: undoing the gov track action")
+		GD.game.governor_track = simpleDeepCopy(action.undo.restore_list)
+		updateGovernorTrack()
+		updateStatusPanel()
+		governorButtons(true)
+		getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="track"})
+		GD.game.players[pcol].governor_clicked = false
 	else
 		log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 		return
 	end
 	--remove entry and update player board UI
 	table.remove(GD.game.players[pcol].pending_actions, index)
-	local player_board = getObjectFromGUID(C.player_boards[action.player_color])
-	p={done=false}
 	if #GD.game.players[pcol].pending_actions == 0 then
-		p.undo = false
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=false})
 	end
-	player_board.call("setState",p)
 end
 
 --[[ ****** TODO: ??? ************
@@ -1177,7 +1215,8 @@ function moveMaharaja()
 	local pos = board.positionToWorld(C.cities[city].maharaja_pos)
 	local maha = getObjectFromGUID(C.maharaja_guid)
 	maha.setLock(false)
-	maha.setPositionSmooth(pos, false, true)
+	-- maha.setPositionSmooth(pos, false, true)
+	maha.setPosition(pos)
 	Wait.condition(function() maha.setLock(true) end, function() return(maha.resting) end, 2)
 	-- move table 1st to 7th, shift others up
 	local temp = simpleDeepCopy(track[1])
@@ -1195,23 +1234,77 @@ end
 
 --[[/////////////// Support functions /////////////////////]]
 
---[[ ********** TODO: use in turn ********
-Set the locked state of a palaces on a player board
+--[[ *****************************
+Set the locked state of a player's houses in the build pool
 ********************************]]
-function palacesLock(pcol, locked)
+function buildPoolLock(pcol, locked)
+	if env.test.trace then log("buildPoolLock()") end
+	locked = locked or false
+	for _,e in ipairs(GD.game.players[pcol].pool) do
+		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	end
+end
+
+--[[ *****************************
+Set the locked state of a player's unplayed palaces
+********************************]]
+function unplayedPalacesLock(pcol, locked)
+	if env.test.trace then log("unplayedPalacesLock()") end
 	locked = locked or false
 	for _,e in ipairs(GD.game.players[pcol].palaces) do
 		if e.g then getObjectFromGUID(e.g).setLock(locked) end
 	end
 end
 
---[[ ********** TODO: use in turn ********
+--[[ *****************************
+Set the locked state of a player's placed houses
+********************************]]
+function placedHousesLock(pcol, locked)
+	if env.test.trace then log("placedHousesLock()") end
+	locked = locked or false
+	for _,e in ipairs(GD.game.players[pcol].placed_houses) do
+		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	end
+end
+
+--[[ *****************************
+Set the locked state of a palaces on a player board
+Defaults to unlocked
+********************************]]
+function palacesLock(pcol, locked)
+	locked = locked or false
+	if env.test.trace then log("palacesLock() "..tostring(locked)) end
+	for _,e in ipairs(GD.game.players[pcol].palaces) do
+		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	end
+end
+
+--[[ *****************************
 Set the locked state of a player's build pool
+Defaults to unlocked
 ********************************]]
 function poolLock(pcol, locked)
 	locked = locked or false
+	if env.test.trace then log("poolLock() "..tostring(locked)) end
 	for _,e in ipairs(GD.game.players[pcol].pool) do
 		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	end
+end
+
+--[[ *****************************
+Set the locked state of all characters.
+If pcol supplied, skip it.
+Defaults to unlocked
+********************************]]
+function charactersLock(pcol, locked)
+	locked = locked or false
+	pcol = pcol or "none"
+	if env.test.trace then log("charactersLock() player: "..tostring(pcol)..", locked = "..tostring(locked)) end
+	local player = getObjectFromGUID(pcol)
+	for id,char in ipairs(C.characters) do
+		if not(player) or player.character_id ~= id then
+			getObjectFromGUID(char.g)setLock(locked)
+		end
 	end
 end
 
@@ -1411,12 +1504,12 @@ end
 --[[ *****************************
 TODO: implement and document
 ********************************]]
-function setGovernorButtons(on)
+function governorButtons(on)
 	on = on or false
-	if env.test.trace then log("enableGovernorButtons()") end
+	if env.test.trace then log("enableGovernorButtons() "..tostring(on)) end
 	local board = getObjectFromGUID(C.board_guid)
 	for _,gov in ipairs(GD.game.governor_track) do
-		local id = "gov_"..tostring(gov.row)
+		local id = "gov_"..tostring(gov.track_row)
 		if on then
 			log("Turn button on for image in row "..id)
 			board.UI.setClass(id ,"gImg_")

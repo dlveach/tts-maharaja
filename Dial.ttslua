@@ -153,6 +153,7 @@ function updateUI()
   for i,entry in ipairs(GD.state.actions) do
     if entry.type == "selected" or entry.type == "extra" then
       self.UI.setAttribute("action_text_"..tostring(i),"text",entry.label)
+      self.UI.setAttribute("action_text_"..tostring(i), "color", "rgb(1,1,0)")
       self.UI.setAttribute("row_action_"..tostring(i),"active",true)
       self.UI.setAttribute("status_text_"..tostring(i),"text",entry.status)
       if entry.status == "Done" then
@@ -163,13 +164,14 @@ function updateUI()
       end
     elseif entry.type == "free" then
       self.UI.setAttribute("action_text_7","text",entry.label)
+      self.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
       self.UI.setAttribute("row_action_7","active",true)
       self.UI.setAttribute("status_text_7","text",entry.status)
       if entry.status == "Done" then
         self.UI.setAttribute("action_text_7", "color", "Gray")
-      elseif entry.status =="Incomplete" then
-        self.UI.setAttribute("action_text_7", "color", "Gray")
-        self.UI.setAttribute("status_text_7", "color", "Red")
+      -- elseif entry.status =="Incomplete" then  --TODO: free actions never incomlete???
+      --   self.UI.setAttribute("action_text_7", "color", "Gray")
+      --   self.UI.setAttribute("status_text_7", "color", "Red")
       end
     else
       log("***WARN: unknown action entry type: "..tostring(entry.type))
@@ -247,6 +249,15 @@ function setState(params)
     for _,action in ipairs(GD.state.actions) do
       if action.action_id == params.action_id then
         action.status = "Done"
+        updateUI()
+        break
+      end
+    end
+  elseif params.state == "undo_action" then
+    local action_id = params.action_id
+    for _,action in ipairs(GD.state.actions) do
+      if action.action_id == params.action_id then
+        action.status = ""
         updateUI()
         break
       end

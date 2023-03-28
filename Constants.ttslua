@@ -106,6 +106,16 @@ C.characters = {
   {g="334d6b", name="Yogi", city="Jaipur", bank_pos=Vector(-9.469384, 3.621516, 20.120684),},
 }
 
+C.character_bonus_descriptions = {
+  "Mogul: First in turn order",
+  "Trader: +1 Gold per turn",
+  "Sadhu: Outer Palace = 2 in scoring",
+  "Wandering Monk: Architect travels for free",
+  "Builder: +1 Free Build/Move",
+  "Artisan: Palace build costs 9",
+  "Yogi: +1 extra action token/turn",
+}
+
 C.cities = {
   Bikaner = {node=1, character=6, maharaja_pos=Vector( 0.739436, 1.5, -0.601276 ),},
   Jaipur = {node=4, character=7, maharaja_pos=Vector(-0.19306, 1.5, -0.430302),},

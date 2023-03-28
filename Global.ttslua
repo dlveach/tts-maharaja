@@ -18,6 +18,19 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////]]
 
+--[[==========================================================================================
+TTS mod for Maharaja
+
+--TODO: documentation
+
+	--TODO: stuff to do
+	-- convert playerboards to tile with jpeg vs token with png.  Takes too long to load.
+	-- get save load working
+
+	-- lots of implementation for feature complete
+
+==========================================================================================]]
+
 env = {}
 env.test = {}
 env.test.trace = true
@@ -25,11 +38,11 @@ env.test.debug = true
 env.test.in_dev = false
 env.test.force_fresh_save = true
 env.test.save_positions = true
-env.test.auto_switch = true
+-- env.test.auto_switch = true
 -- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
-env.test.players = {"Green","Red",}
+-- env.test.players = {"Green","Red",}
 -- env.test.players = {"Green","Red","Blue"}
 -- env.test.players = {"Red","Green","Purple",}
 
@@ -46,6 +59,7 @@ TTS Game Load
 ********************************]]
 function onLoad(save_state)
 	if env.test.force_fresh_save then saved_data = "" end
+	--Initialize stuff
 	if not(env.test.in_dev) then
 		getObjectFromGUID(C.board_guid).interactable = false
 		getObjectFromGUID(C.palace_object_guid).setInvisibleTo(Color.list)
@@ -54,6 +68,9 @@ function onLoad(save_state)
 			getObjectFromGUID(g).setInvisibleTo(Color.list)
 		end
 	end
+	UI.setAttribute("end_turn_pnl","visibility","Pink")
+	UI.setAttribute("end_turn_pnl","active","true")
+	--Reload saved data or if fresh load initialize everything
 	if (saved_data ~= "") then
     log("onLoad(): load with saved data")
     local restore_data = JSON.decode(saved_data)
@@ -76,7 +93,7 @@ function onLoad(save_state)
 			getObjectFromGUID(g).setLock(true)
 		end
 	end
-	Wait.time(function() reloadUI(C.board_guid) end,5)
+	-- Wait.time(function() reloadUI(C.board_guid) end,5)
 end
 
 --[[ *****************************
@@ -84,8 +101,16 @@ HACK: reload an object's XML UI
 ********************************]]
 function reloadUI(guid)
 	if env.test.trace then log("reloadUI() guid: "..tostring(guid)) end
-	local obj = getObjectFromGUID(guid)
-	if obj ~= nil then obj.UI.setXml(obj.UI.getXml()) end
+	if guid then
+		local obj = getObjectFromGUID(guid)
+		if obj ~= nil then
+			obj.UI.setXml(obj.UI.getXml())
+		else
+			log("***WARN: reloadUI() unable to get object for "..tostring(guid))
+		end
+	else
+		UI.setXml(UI.getXml())
+	end
 end
 
 --[[ *****************************
@@ -198,7 +223,8 @@ function startGameBtn(player, btn, id)
 		return
 	end
 	UI.setAttribute("startPanel","active",false)
-	startGame()
+	reloadUI(C.board_guid)
+	Wait.frames(function() startGame() end, 10)
 end
 
 --[[ *****************************
@@ -209,6 +235,17 @@ function governorClick(player, btn, id)
 	if player.color ~= GD.game.current_player_color then return end
 	if GD.game.players[player.color].governor_clicked then return end --guard double clicks
 	GD.game.players[player.color].governor_clicked = true
+	local valid = false
+	for _,e in ipairs(GD.game.players[player.color].dial_actions) do
+		if e.action_id == "track" then
+			valid = true
+			e.status = "Done"
+		end
+	end
+	if not(valid) then
+		log("***ERROR: could not locate dial action for governorClick()")
+		return
+	end
 	local track = GD.game.governor_track
 	-- build a pending action and store current order in undo
 	local row_clicked = tonumber(Split(id,'_')[2])
@@ -347,8 +384,38 @@ function onObjectDrop(pcol, obj)
 	end
 end
 
+--[[ ********* TODO **************
+--TODO: implement and document
+********************************]]
 function extraActionClick(obj, pcol, rclick)
 	log("extraActionClick() "..obj.getName()..", "..pcol..", "..tostring(rclick))
+	log("TODO: extraActionClick()  <--------------------------")
+end
+
+--[[ *****************************
+End turn with required actions penalty dialog.
+If 'Cancel', return to turn actions.
+if 'OK' then set failed status on remaining actions and end turn.
+********************************]]
+function penaltyDialog(player, btn, id)
+	log("penaltyDialog() "..player.color..", "..tostring(id))
+	if player.color ~= GD.game.current_player_color then return end
+	local action = Split(id,'_')[3]
+	if env.test.debug then log("action is "..tostring(action)) end
+	if action == "ok" then
+		for _,action in ipairs(GD.game.players[player.color].dial_actions) do  --TODO: this feels a bit HACK ish, is there a better way?
+			if action.type == "selected" and action.status ~= "Done" then
+				action.status = "Failed"
+			end
+		end
+		endTurn(player.color)
+	elseif action == "cancel" then
+		--noop
+	else
+		log("***ERROR: unknown action")
+		return
+	end
+	UI.setAttribute("end_turn_pnl","visibility","Pink")
 end
 
 --[[/////////////// Game Setup /////////////////////]]
@@ -537,6 +604,7 @@ function setupPlayers()
 	GD.game.players = {}
 	GD.game.status_visibility = "Pink"
 	for _,pcol in ipairs(GD.game.player_order) do
+		reloadUI(C.player_boards[pcol])
 		GD.game.players[pcol] = simpleDeepCopy(C.player_data)
 		local player = GD.game.players[pcol]
 		player.pawn_location = getObjectFromGUID(C.player_pawns[pcol]).getPosition()
@@ -816,13 +884,14 @@ TODO: document
 function beginNextRound()
 	if env.test.trace then log("beginNextRound()") end
 	GD.game.current_round = GD.game.current_round + 1
+	if GD.env.verbose then broadcastToAll("Beginning round "..tostring(GD.game.current_round).." of max 10") end
 	moveMaharaja()
-	GD.game.remaining_round_players = {}
+	GD.game.remaining_round_players = {} --TODO: redundant to pdata.has_actions ???  Decide which way to go
 	GD.game.stage = "select_actions"
 	for pcol,pdata in pairs(GD.game.players) do
+		pdata.has_actions = true
 		local dial = getObjectFromGUID(C.action_dials[pcol])
 		dial.call("setState",{state="select_actions",reset=true})
-		GD.game.players[pcol].has_actions = true --TODO: move this to "confirm" button?
 		local txt = "Secretly choose turn actions and confirm with Done.\n"
 		txt = txt .. "Player turns will begin once all have confirmed.\n"
 		txt = txt .. "Until then selections can be modified."
@@ -971,7 +1040,7 @@ function startPlayerTurn(pcol)
 	if env.test.trace then log("startPlayerTurn() for player "..tostring(pcol)) end
 	local player = GD.game.players[pcol]
 	assert(player,"Failed to locate player for color "..tostring(pcol))
-	player.failed_actions = false
+	-- player.failed_actions = false
 	player.pending_actions = {}
 	if GD.env.verbose then printToAll("Starting turn for player "..pcol) end
 	local dial = getObjectFromGUID(C.action_dials[pcol])
@@ -1011,15 +1080,18 @@ function startPlayerTurn(pcol)
 			dial.call("setState",{state="complete_action",action_id="gold"})
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 			if GD.env.verbose then printToAll(pcol.." +2 gold for Coins action") end
+			action.status = "Done"
 		elseif action.action_id == "quarry" then
 			--TODO: immediate quarry action
 			if quarryAction(pcol) then
 				dial.call("setState",{state="complete_action",action_id="quarry"})
 				if GD.env.verbose then printToAll(pcol.." moves 2 houses into their Build Pool") end
+				action.status = "Done"
 			else
 				dial.call("setState",{state="fail_action",action_id="quarry"})
 				if GD.env.verbose then printToAll(pcol.." is unable to complete selected Quarry action!") end
-				player.failed_actions = true
+				-- player.failed_actions = true
+				action.status = "Failed"
 			end
 		elseif action.action_id == "palace" then palace = true
 		elseif action.action_id == "house" or action.action_id == "free" then pool = true
@@ -1037,10 +1109,10 @@ function startPlayerTurn(pcol)
 	local txt = "Execute actions in any order.\n"
 	txt = txt.."May move Architect at any time.\n"
 	txt = txt.."All required actions must be executed.\n"
-	txt = txt.."Penalty: All other players + 2 coins."
 	for _,p in ipairs(GD.game.player_order) do
 		local active = (p == pcol)
-		getObjectFromGUID(C.player_boards[p]).call("setState",{active=active,done=active,undo=false,help_text=txt})
+		local help_txt = txt..C.character_bonus_descriptions[player.character_id]
+		getObjectFromGUID(C.player_boards[p]).call("setState",{active=active,done=active,undo=false,help_text=help_txt})
 	end
 end
 
@@ -1130,8 +1202,9 @@ function playerDone(pcol)
 			if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
 			table.remove(player.pending_actions, index)
 		end
-		if player.failed_actions then
-			--give other players +2 gold
+		-- if player.failed_actions then
+		if failedActions(pcol) then
+			--give other players +2 gold automatically
 			for color,player in pairs(GD.game.players) do
 				if color ~= pcol then
 					player.gold = player.gold + 2
@@ -1140,12 +1213,10 @@ function playerDone(pcol)
 				end
 			end
 		else
-
-			--TODO:
-			-- if actions still to complete,  then
-				-- show confirm dialog
-				-- return
-
+			if requiredActions(pcol) then
+				UI.setAttribute("end_turn_pnl","visibility","Pink|"..pcol)
+				return
+			end
 		end
 		endTurn(pcol)
 	else
@@ -1158,17 +1229,41 @@ Check for end of round & start a new one otherwise start next players turn
 ********************************]]
 function endTurn(pcol)
 	if env.test.trace then log("endTurn() "..tostring(pcol)) end
-	local index = indexOf(GD.game.remaining_round_players,pcol)
+	local index = indexOf(GD.game.remaining_round_players,pcol) --TODO: redundant ???
 	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
-	table.remove(GD.game.remaining_round_players,index)
-	if #GD.game.remaining_round_players == 0 then
-		beginNextRound()
+	--clear out all player turn data`
+	local player = GD.game.players[pcol]
+	player.has_actions = false
+	player.dial_actions = {}
+	player.pending_actions = {}
+	player.actions_set = false
+	getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
+	--update round and check for end of round or end of game
+	table.remove(GD.game.remaining_round_players,index) --TODO: redundant to has_actions ???
+	if #GD.game.remaining_round_players == 0 then  --TODO: just check for any player.has_actions ???
+		finishCurrentRound()
 	else
-		if GD.game.current_round == 10 then
-			endGame()
-			return
-		end
 		startPlayerTurn(setNextPlayer())
+	end
+end
+
+--[[ ********* TODO **************
+TODO: implement and document
+********************************]]
+function finishCurrentRound()
+	if env.test.trace then log("finishCurrentRound():") end
+	if env.test.debug then log("Finishing round "..tostring(GD.game.current_round)) end
+
+	--TODO: score current city
+	log("TODO: score current city <-----------------")
+		--calculate city score
+		--hand out payments
+		--show results dialog ???
+
+	if GD.game.current_round == 10 then  --TODO: may move to city scoring results dialog ???
+		endGame()
+	else
+		beginNextRound()
 	end
 end
 
@@ -1271,6 +1366,28 @@ end
 --[[/////////////// Support functions /////////////////////]]
 
 --[[ *****************************
+TODO: need this in a fn?
+********************************]]
+function failedActions(pcol)
+	if env.test.trace then log("failedActions() "..tostring(pcol)) end
+	for _,action in ipairs(GD.game.players[pcol].dial_actions) do
+		if action.type == "selected" and action.status == "Failed" then return true end
+	end
+	return false
+end
+
+--[[ *****************************
+TODO: need this in a fn?
+********************************]]
+function requiredActions(pcol)
+	if env.test.trace then log("requiredActions() "..tostring(pcol)) end
+	for _,action in ipairs(GD.game.players[pcol].dial_actions) do
+		if action.type == "selected" and action.status == "" then return true end
+	end
+	return false
+end
+
+--[[ *****************************
 Set the locked state of a player's houses in the build pool
 ********************************]]
 function buildPoolLock(pcol, locked)
@@ -1355,7 +1472,7 @@ function updateStatusPanel()
 		UI.setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
 	end
 	--update player scores per city
-	log("TODO: update status panel UI with player city scores")
+	log("TODO: update status panel city scores <---------------")
 end
 
 --[[ *****************************

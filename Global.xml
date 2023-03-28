@@ -5,18 +5,22 @@
 
  <Defaults>   <!-- BoSL defaults -->
 
+  <Panel
+    allowDragging="false"
+    returnToOriginalPositionWhenReleased="false"
+    rectAlignment="MiddleCenter" />
+
   <Button hoverClass="hover"
     pressClass="press"
     selectClass="select"
     color="blue"
-    textColor="white"
+    textColor="rgb(1,1,0)"
     fontSize="14"
     font="Arial"
     image="Sprites/Layout/Button"
     textShadow="rgba(0,0,0,0.6)" />
   <Button class="hover"
     color="cyan"
-    textColor="white"
     textShadow="rgba(0,0,0,1)"/>
   <Button class="press"
     color="blue"
@@ -32,7 +36,10 @@
     textColor="grey" />
 
   <TableLayout
+    autoCalculateHeight="true"
     useGlobalCellPadding="false"
+    padding="0 0 0 0"
+    color="rgba(0,0,0,0)"
     rowBackgroundColor="rgba(0,0,0,0)" />
 
   <Row
@@ -40,7 +47,7 @@
     dontUseTableRowBackground="true"
     color="rgba(0,0,0,0)"  />
 
-  <!-- dontUseTableCellBackground false during dev to show lines -->
+  <!-- Cell dontUseTableCellBackground false during dev to show lines -->
   <Cell
     dontUseTableCellBackground="true"
     color="rgba(0,0,0,0)"
@@ -61,13 +68,42 @@
 
 </Defaults>
 
+<Panel id="end_turn_pnl"  active="false"
+  height="220" width="420"
+  padding="10 10 10 10"
+  color="#003699"
+  image="Sprites/Layout/Base">
+  <Panel
+    color="#00091a"
+    image="Sprites/Layout/Base"
+    childAlignment="MiddleCenter">
+    <TableLayout>
+      <Row preferredHeight="100">
+        <Cell padding="0 0 0 0">
+          <Text class="large" color="Gray">
+            *** Warning ***
+            You still have required actions
+            Penalty: Other players +2 gold.
+           </Text>
+        </Cell>
+      </Row>
+      <Row preferredHeight="80">
+        <Cell padding="25 25 20 5">
+          <HorizontalLayout
+            spacing="40">
+            <Button id="end_turn_ok" onClick="penaltyDialog" fontSize="20" text="OK"/>
+            <Button id="end_turn_cancel" onClick="penaltyDialog" fontSize="20" text="Cancel"/>
+          </HorizontalLayout>
+        </Cell>
+      </Row>
+    </TableLayout>
+  </Panel>
+</Panel>
+
 <Panel id="startPanel"  active="true"
-  class="StartPanel"
+  allowDragging="true"
   height="400" width="500"
   padding="20 20 20 20"
-  allowDragging="true"
-  returnToOriginalPositionWhenReleased="false"
-  rectAlignment="MiddleCenter"
   color="#003699"
   image="Sprites/Layout/Base">
   <VerticalLayout
@@ -95,20 +131,11 @@
   </VerticalLayout>
 </Panel>
 
-
 <Panel id="statusPanel" active="false"
-  raycastTarget="false"
   width="320" height="370"
   offsetXY="-750 350"
-  allowDragging="true"
-  returnToOriginalPositionWhenReleased="false"
-  color="rgba(0,0,0,0)"
-  rectAlignment="MiddleCenter">
-  <TableLayout id="Status_table" class="StatusTable"
-    autoCalculateHeight="true"
-    useGlobalCellPadding="false"
-    padding="0 0 0 0"
-    color="rgba(0,0,0,0)"
+  color="rgba(0,0,0,0)" >
+  <TableLayout id="Status_table"
     raycastTarget="true">
     <Row
       preferredHeight="40"

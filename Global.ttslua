@@ -799,7 +799,8 @@ function setInitialPlacement(action)
 			startingQuarry(pcol)
 		end
 		broadcastToAll("Begin First Round")
-		beginGameRound()
+		GD.game.current_round = 0
+		beginNextRound()
 		return
 	else
 		getObjectFromGUID(C.player_boards[action.player_color]).call("setState")
@@ -812,11 +813,11 @@ end
 --[[ *****************************
 TODO: document
 ********************************]]
-function beginGameRound()
-	if env.test.trace then log("beginGameRound()") end
-	--move maharaja
+function beginNextRound()
+	if env.test.trace then log("beginNextRound()") end
+	GD.game.current_round = GD.game.current_round + 1
 	moveMaharaja()
-	--setup players to select actions
+	GD.game.remaining_round_players = {}
 	GD.game.stage = "select_actions"
 	for pcol,pdata in pairs(GD.game.players) do
 		local dial = getObjectFromGUID(C.action_dials[pcol])
@@ -826,6 +827,7 @@ function beginGameRound()
 		txt = txt .. "Player turns will begin once all have confirmed.\n"
 		txt = txt .. "Until then selections can be modified."
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,done=false,undo=false,help_text=txt})
+		table.insert(GD.game.remaining_round_players, pcol)
 	end
 end
 
@@ -1137,11 +1139,36 @@ function playerDone(pcol)
 					if GD.env.verbose then printToAll(color.." recieves +2 gold") end
 				end
 			end
+		else
+
+			--TODO:
+			-- if actions still to complete,  then
+				-- show confirm dialog
+				-- return
+
 		end
-		--TODO: check for last player in round, start new round if so
-		--otherwise: startPlayerTurn(setNextPlayer())
+		endTurn(pcol)
 	else
 		log("*** ERROR: unknown game stage")
+	end
+end
+
+--[[ *****************************
+Check for end of round & start a new one otherwise start next players turn
+********************************]]
+function endTurn(pcol)
+	if env.test.trace then log("endTurn() "..tostring(pcol)) end
+	local index = indexOf(GD.game.remaining_round_players,pcol)
+	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
+	table.remove(GD.game.remaining_round_players,index)
+	if #GD.game.remaining_round_players == 0 then
+		beginNextRound()
+	else
+		if GD.game.current_round == 10 then
+			endGame()
+			return
+		end
+		startPlayerTurn(setNextPlayer())
 	end
 end
 
@@ -1196,11 +1223,12 @@ function playerUndo(pcol)
 	end
 end
 
---[[ ****** TODO: ??? ************
+--[[ ********* TODO **************
 TODO: document
 ********************************]]
 function extraAction(pcol)
 	if env.test.trace then log("extraAction(): "..pcol) end
+	log("TODO: implement extraAction() <--------------------")
 end
 
 --[[ *****************************
@@ -1230,6 +1258,14 @@ function moveMaharaja()
 	-- update city status UI
 	updateGovernorTrack()
 	updateStatusPanel()
+end
+
+--[[ ********* TODO **************
+TODO: implement and document
+********************************]]
+function endGame()
+	if env.test.trace then log("endGame(): "..pcol) end
+	log("TODO: implement endGame() <--------------------")
 end
 
 --[[/////////////// Support functions /////////////////////]]

@@ -29,6 +29,8 @@ TTS mod for Maharaja
 
 	-- lots of implementation for feature complete
 
+	--BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too.
+
 ==========================================================================================]]
 
 env = {}
@@ -246,51 +248,48 @@ function governorClick(player, btn, id)
 	if player.color ~= GD.game.current_player_color then return end
 	if GD.game.players[player.color].governor_clicked then return end --guard double clicks
 	GD.game.players[player.color].governor_clicked = true
-	setActionDone(player.color, "track")
 	local track = GD.game.governor_track
 	-- build a pending action and store current order in undo
 	local row_clicked = tonumber(Split(id,'_')[2])
-	local action = {
-		key = "governor_track",
+	local pending_action = {
+		key = "track",
 		player_color = pcol,	--TODO: need this?
 		row_clicked = row_clicked,  --TODO: need this?
 		undo = {
 			restore_list = simpleDeepCopy(track),
 		}
 	}
-	table.insert(GD.game.players[player.color].pending_actions, action)
-	--find the data table index for the clicked row
-	local index = -1
-	for i=1,7 do
-		if track[i].track_row == row_clicked then
-			index = i
-			break
+	if updateDialAction(player.color, pending_action) then
+		table.insert(GD.game.players[player.color].pending_actions, pending_action)
+		--find the data table index for the clicked row
+		local index = -1
+		for i=1,7 do
+			if track[i].track_row == row_clicked then
+				index = i
+				break
+			end
 		end
+		assert(index > 0,"***ERROR: bad track index")
+		-- move down two (or one or zero) spots in track table, shift others up
+		local temp = simpleDeepCopy(track[index])
+		temp.track_row = temp.track_row - 2
+		if temp.track_row < 1 then temp.track_row = 1 end
+		temp.UI_row = temp.UI_row + 2
+		if temp.UI_row > 7 then temp.UI_row = 7 end
+		local new_index = index - 2
+		if new_index < 1 then new_index = 1 end
+		for i = index, new_index+1, -1 do
+			track[i] = simpleDeepCopy(track[i-1])
+			track[i].track_row = track[i-1].track_row + 1
+			track[i].UI_row = track[i-1].UI_row - 1
+		end
+		track[new_index] = temp
+		updateGovernorTrack()
+		updateStatusPanel()
+		governorButtons(false)
+		updateDialUI(player.color)
+		getObjectFromGUID(C.player_boards[player.color]).call("setState",{undo=true})
 	end
-	assert(index > 0,"***ERROR: bad track index")
-	-- move down two (or one or zero) spots in track table, shift others up
-	local temp = simpleDeepCopy(track[index])
-	temp.track_row = temp.track_row - 2
-	if temp.track_row < 1 then temp.track_row = 1 end
-	temp.UI_row = temp.UI_row + 2
-	if temp.UI_row > 7 then temp.UI_row = 7 end
-	local new_index = index - 2
-	if new_index < 1 then new_index = 1 end
-	for i = index, new_index+1, -1 do
-		track[i] = simpleDeepCopy(track[i-1])
-		track[i].track_row = track[i-1].track_row + 1
-		track[i].UI_row = track[i-1].UI_row - 1
-	end
-	track[new_index] = temp
-	updateGovernorTrack()
-	updateStatusPanel()
-	governorButtons(false)
-
-	-- getObjectFromGUID(C.action_dials[player.color]).call("setState",{state="complete_action",action_id="track"})
-	--TODO: refactor for new dial design
-	log("TODO: refactor governorClick() for new dial design. <--------------")
-
-	getObjectFromGUID(C.player_boards[player.color]).call("setState",{undo=true})
 end
 
 --[[ *****************************
@@ -911,6 +910,8 @@ function beginNextRound()
 	GD.game.stage = "select_actions"
 	for pcol,pdata in pairs(GD.game.players) do
 		pdata.has_actions = true
+		pdata.dial_actions = {}
+		updateDialUI(pcol)
 		local dial = getObjectFromGUID(C.action_dials[pcol])
 		dial.call("reset")
 		dial.call("enableDialButtons")
@@ -965,6 +966,7 @@ function characterDrop(pcol, obj)
 	elseif GD.game.stage == "player_turn" then
 
 		--TODO: implement this
+		log("TODO: implement character drop on player turn <-------------------")
 
 	end
 end
@@ -1013,6 +1015,7 @@ function houseDrop(pcol, obj)
 		snapBack(obj)
 		return
 	end
+	local player = GD.game.players[pcol]
 	if GD.game.stage == "initial_placement" then
 		local node = GD.network[index]
 		if node.type == "village" then
@@ -1032,7 +1035,7 @@ function houseDrop(pcol, obj)
 				},
 			}
 			--show done and undo buttons
-			table.insert(GD.game.players[pcol].pending_actions, action)
+			table.insert(player.pending_actions, action)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 		elseif node.type == "city" then
 			snapBack(obj)
@@ -1054,12 +1057,11 @@ function houseDrop(pcol, obj)
 			if not(pos) then --this house coming from player's pool
 				pos = getPlayerBoardLocation(obj)
 				rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
-				action_key = "house"
+				action_key = "build"
 			end
-			--TODO: need to validate action_key against available dial actions?
 			placeVillageHouse(obj,node)
-			local action = {
-				key = action_key,
+			local pending_action = {
+				key = action_key, --TODO: rename this to 'id' for consistency???
 				player_color = pcol,
 				guid = obj.getGUID(),
 				undo = {
@@ -1068,23 +1070,18 @@ function houseDrop(pcol, obj)
 					snapback = {pos=pos,rot=rot}
 				},
 			}
-			if GD.game.players[pcol].free_action then
-				GD.game.players[pcol].free_action = false
-				action.free_action = true
+			if player.free_action then
+				player.free_action = false
+				pending_action.free_action = true
 			end
-			table.insert(GD.game.players[pcol].pending_actions, action)
-			if action.free_action then
-				-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id="free-build-move"})
-				--TODO: refactor for new dial design
-				log("TODO: refactor houseDrop() for new dial design. <--------------")
+			if updateDialAction(pcol, pending_action) then
+				updateDialUI(pcol)
+				table.insert(player.pending_actions, pending_action)
+				getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
 			else
-				-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id=action_key})
-				--TODO: refactor for new dial design
-				log("TODO: refactor houseDrop() for new dial design. <--------------")
-			end
-			getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
-			if not(GD.game.players[pcol].free_action) then
-				setActionDone(pcol, action_key)
+				--shouldn't really happen but handle anyway
+				log("***WARN: no matching dial_action for dropped house")
+				snapback(obj)
 			end
 		elseif node.type == "city" then
 			log("TODO: handle house drop action in City <--------------")
@@ -1161,24 +1158,27 @@ function startPlayerTurn(pcol)
 	local palace,pool,move,track,char = false,false,false,false,false
 	for _,dial_action in pairs(player.dial_actions) do
 		for _,action in ipairs(dial_action.actions) do
-			if action.action_id == "gold" then
+			if action.id == "gold" then
 				player.gold = player.gold + 2
 				getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 				if GD.env.verbose then printToAll(pcol.." +2 gold for Coins action") end
 				action.status = "Done"
-			elseif action.action_id == "quarry" then
+				updateDialUI(pcol)
+			elseif action.id == "quarry" then
 				if quarryAction(pcol) then
 					if GD.env.verbose then printToAll(pcol.." moves 2 houses into their Build Pool") end
 					action.status = "Done"
+					updateDialUI(pcol)
 				else
 					if GD.env.verbose then printToAll(pcol.." is unable to complete selected Quarry action!") end
 					action.status = "Failed"
+					updateDialUI(pcol)
 				end
-			elseif action.action_id == "palace" then palace = true
-			elseif action.action_id == "house" or action.action_id == "free" then pool = true
-			elseif action.action_id == "move" or action.action_id == "free" then move = true
-			elseif action.action_id == "track" then track = true
-			elseif action.action_id == "character" then char = true
+			elseif action.id == "palace" then palace = true
+			elseif action.id == "build" or action.action_id == "free" then pool = true
+			elseif action.id == "move" or action.action_id == "free" then move = true
+			elseif action.id == "track" then track = true
+			elseif action.id == "character" then char = true
 			end
 		end
 	end
@@ -1188,7 +1188,6 @@ function startPlayerTurn(pcol)
 	if move then placedHousesLock(pcol, false) end
 	if track then governorButtons(true) end
 	if char then charactersLock(pcol, false) end
-	updateDialUI(pcol)
 	--enable player board for actions
 	local txt = "Execute actions in any order.\n"
 	txt = txt.."May move Architect at any time.\n"
@@ -1263,21 +1262,22 @@ function playerDone(pcol)
 		while #player.pending_actions > 0 do
 			local index = #player.pending_actions
 			local action = player.pending_actions[index]
-			if action.key == "governor_track" then
-				log("TODO: finalize track action")
+			if action.key == "track" then
 				player.governor_clicked = false
-				--TODO: anything else?
-			elseif action.key == "coins" then
-				--TODO: nothing to do here? coins given at start of turn
+			elseif action.key == "gold" then
+				--noop
 			elseif action.key == "character" then
-				log("TODO: finalize character action")
+				log("TODO: finalize character action <---------------")
+
 			elseif action.key == "palace" then
-				log("TODO: finalize palace action")
+				log("TODO: finalize palace action <---------------")
+
 			elseif action.key == "quarry" then
-				--TODO: nothing to do here? quarry executed at start of turn
+				--noop
 			elseif action.key == "move" then
-				log("TODO: finalize move action")
-			elseif action.key == "house" then
+				log("TODO: finalize move action <---------------")
+
+			elseif action.key == "build" then
 				log("TESTING: finalize house action")
 				local obj = getObjectFromGUID(action.guid)
 				removeFromPlayerBoard(obj)
@@ -1400,7 +1400,7 @@ function playerUndo(pcol)
 
 		GD.game.players[pcol].governor_clicked = false
 		action.status = ""
-	elseif action.key == "house" then
+	elseif action.key == "build" then
 		log("TESTING: undoing build house action")
 		local obj = getObjectFromGUID(action.undo.guid)
 		obj.setPosition(action.undo.snapback.pos)
@@ -1430,7 +1430,6 @@ function playerUndo(pcol)
 			log("TODO: refactor playerUndo() for new dial design")
 
 		end
-		action.status = ""
 	else
 		log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 		return
@@ -1489,18 +1488,29 @@ end
 
 --[[/////////////// Support functions /////////////////////]]
 
-function setActionDone(pcol, action_id)
-	local valid = false
-	for _,e in ipairs(GD.game.players[pcol].dial_actions) do
-		if e.action_id == action_id then
-			valid = true
-			e.status = "Done"
+function updateDialAction(pcol, action)
+	if env.test.trace then log("updateDialAction() "..tostring(pcol)..", "..tostring(action.id)) end
+	local player = GD.game.players[pcol]
+	if action.free_action then
+		local dial_action = player.dial_actions["free-action"]
+		if dial_action then
+			dial_action.actions[1].status = "Done"
+			return true
+		else
+			log("***ERROR: could not locate free-action")
+			return false
+		end
+	else
+		for id,dial_action in pairs(player.dial_actions) do
+			for _,entry in ipairs(dial_action.actions) do
+				if entry.id == action.key then
+					entry.status = "Done"
+					return true
+				end
+			end
 		end
 	end
-	if not(valid) then
-		log("***ERROR: could not locate "..pcol.." dial action for "..tostring(action_id))
-		return
-	end
+	return false
 end
 
 --[[ *****************************

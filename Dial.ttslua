@@ -220,7 +220,7 @@ function setState(params)
     GD.state.stage = "extra_action"
     enableDialButtons()
 
-    --TODO: what about durign player turn?
+    --TODO: what about during a player turn?
 
     if GD.state.flipped then flipMe() end
   elseif params.state == "player_turn" then
@@ -247,7 +247,7 @@ function setState(params)
   elseif params.state == "complete_action" then
     local action_id = params.action_id
     for _,action in ipairs(GD.state.actions) do
-      if action.action_id == params.action_id then
+      if action.action_id == params.action_id and action.status ~= "Done" then
         action.status = "Done"
         updateUI()
         break
@@ -256,7 +256,7 @@ function setState(params)
   elseif params.state == "undo_action" then
     local action_id = params.action_id
     for _,action in ipairs(GD.state.actions) do
-      if action.action_id == params.action_id then
+      if action.action_id == params.action_id and action.status == "Done" then
         action.status = ""
         updateUI()
         break
@@ -265,7 +265,7 @@ function setState(params)
   elseif params.state == "fail_action" then
     local action_id = params.action_id
     for _,action in ipairs(GD.state.actions) do
-      if action.action_id == params.action_id then
+      if action.action_id == params.action_id and action.status ~= "Incomplete" then
         action.status = "Incomplete"
         updateUI()
         break

@@ -38,11 +38,11 @@ env.test.debug = true
 env.test.in_dev = false
 env.test.force_fresh_save = true
 env.test.save_positions = true
--- env.test.auto_switch = true
+env.test.auto_switch = true
 -- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
--- env.test.players = {"Green","Red",}
+env.test.players = {"Green","Red",}
 -- env.test.players = {"Green","Red","Blue"}
 -- env.test.players = {"Red","Green","Purple",}
 
@@ -235,17 +235,18 @@ function governorClick(player, btn, id)
 	if player.color ~= GD.game.current_player_color then return end
 	if GD.game.players[player.color].governor_clicked then return end --guard double clicks
 	GD.game.players[player.color].governor_clicked = true
-	local valid = false
-	for _,e in ipairs(GD.game.players[player.color].dial_actions) do
-		if e.action_id == "track" then
-			valid = true
-			e.status = "Done"
-		end
-	end
-	if not(valid) then
-		log("***ERROR: could not locate dial action for governorClick()")
-		return
-	end
+	-- local valid = false
+	-- for _,e in ipairs(GD.game.players[player.color].dial_actions) do
+	-- 	if e.action_id == "track" then
+	-- 		valid = true
+	-- 		e.status = "Done"
+	-- 	end
+	-- end
+	-- if not(valid) then
+	-- 	log("***ERROR: could not locate dial action for governorClick()")
+	-- 	return
+	-- end
+	setActionDone(player.color, "track")
 	local track = GD.game.governor_track
 	-- build a pending action and store current order in undo
 	local row_clicked = tonumber(Split(id,'_')[2])
@@ -953,16 +954,34 @@ function houseDrop(pcol, obj)
 	if env.test.trace then log("houseDrop()") end
 	local board = getObjectFromGUID(C.board_guid)
 	local color = obj.getName()
-	local function snapBack()
-		if isObjectPlaced(obj.getGUID()) then
-			log("TODO: Handle placed obj snapback ***")
-			--TODO: use array of GD.snaps for placed objects?
+	--/////// internal functions ///////
+	local function snapBack(obj)
+		local pos = placedObjSnap(obj.getGUID())
+		if pos then
+			obj.setPosition(pos)
+			obj.setRotation(getObjectFromGUID(C.board_guid).getRotation())
 		else
 			obj.setPosition(getPlayerBoardLocation(obj))
 			obj.setRotation(getObjectFromGUID(C.player_boards[color]).getRotation())
 		end
 		return
 	end
+	local function placeVillageHouse(obj, node)
+		table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
+		local pos = board.positionToWorld(node.center)
+		if GD.game.player_count > 2 then
+			--TODO: set position of house relative to village center, remove HACK: VILLAGE_OFFSET (working pretty good)
+			local pos_1 = node.center - VILLAGE_OFFSET
+			local pos_2 = node.center + VILLAGE_OFFSET
+			pos = board.positionToWorld(pos_1)
+			if #node.houses == 1 then pos = board.positionToWorld(pos_2) end
+		end
+		pos.y = 1.5
+		obj.setRotation(board.getRotation())
+		obj.setPosition(pos)
+		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+	end
+	--//////////////////////////////////
 	local pos = obj.getPosition()
 	pos.y = 0
 	local index = closestNode(pos)
@@ -975,23 +994,10 @@ function houseDrop(pcol, obj)
 		local node = GD.network[index]
 		if node.type == "village" then
 			if isVillageFull(node) then
-				snapBack()
+				snapBack(obj)
 				return
 			end
-			table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
-			local pos = board.positionToWorld(node.center)
-			if GD.game.player_count > 2 then
-				--TODO: set position of house relative to village center, remove HACK: VILLAGE_OFFSET (working pretty good)
-				local pos_1 = node.center - VILLAGE_OFFSET
-				local pos_2 = node.center + VILLAGE_OFFSET
-				pos = board.positionToWorld(pos_1)
-				if #node.houses == 1 then pos = board.positionToWorld(pos_2) end
-			end
-			pos.y = 1.5
-			obj.setRotation(board.getRotation())
-			obj.setPosition(pos)
-			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-			--add a pending action for this house placement
+			placeVillageHouse(obj,node)
 			local action = {
 				key = "initial_placement",
 				player_color = pcol,
@@ -1006,16 +1012,58 @@ function houseDrop(pcol, obj)
 			table.insert(GD.game.players[pcol].pending_actions, action)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 		elseif node.type == "city" then
-			snapBack()
-			return
+			snapBack(obj)
+			-- return
 		else
-			snapBack()
-			return
+			snapBack(obj)
+			-- return
 		end
 	else
-
-		log("TODO: handle house drop during play ***")
-
+		local node = GD.network[index]
+		if node.type == "village" then
+			if isVillageFull(node) then
+				snapBack(obj)
+				return
+			end
+			local pos = placedObjSnap(obj.getGUID())
+			local rot = getObjectFromGUID(C.board_guid).getRotation()
+			local action_key = "move"
+			if not(pos) then --this house coming from player's pool
+				pos = getPlayerBoardLocation(obj)
+				rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
+				action_key = "house"
+			end
+			--TODO: need to validate action_key against available dial actions?
+			placeVillageHouse(obj,node)
+			local action = {
+				key = action_key,
+				player_color = pcol,
+				guid = obj.getGUID(),
+				undo = {
+					node_index = index,
+					guid = obj.getGUID(),
+					snapback = {pos=pos,rot=rot}
+				},
+			}
+			if GD.game.players[pcol].free_action then
+				GD.game.players[pcol].free_action = false
+				action.free_action = true
+			end
+			table.insert(GD.game.players[pcol].pending_actions, action)
+			if action.free_action then
+				getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id="free-build-move"})
+			else
+				getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id=action_key})
+			end
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
+			if not(GD.game.players[pcol].free_action) then
+				setActionDone(pcol, action_key)
+			end
+		elseif node.type == "city" then
+			log("TODO: handle house drop action in City <--------------")
+		else
+			snapBack(obj)
+		end
 	end
 end
 
@@ -1042,6 +1090,7 @@ function startPlayerTurn(pcol)
 	assert(player,"Failed to locate player for color "..tostring(pcol))
 	-- player.failed_actions = false
 	player.pending_actions = {}
+	player.free_action = false
 	if GD.env.verbose then printToAll("Starting turn for player "..pcol) end
 	local dial = getObjectFromGUID(C.action_dials[pcol])
 	Wait.condition(function() dial.call("setState",{state="player_turn"}) end,
@@ -1059,6 +1108,7 @@ function startPlayerTurn(pcol)
 		player.character_bonus = "build_palace_discount"
 	elseif player.character_id == 5 then
 		dial.call("setState",{state="free_action"})
+		player.free_action = true
 		if env.test.debug then log("Setting player "..pcol.." free Architect travel") end
 		player.character_bonus = "free_build_move"
 	elseif player.character_id == 4 then
@@ -1082,7 +1132,6 @@ function startPlayerTurn(pcol)
 			if GD.env.verbose then printToAll(pcol.." +2 gold for Coins action") end
 			action.status = "Done"
 		elseif action.action_id == "quarry" then
-			--TODO: immediate quarry action
 			if quarryAction(pcol) then
 				dial.call("setState",{state="complete_action",action_id="quarry"})
 				if GD.env.verbose then printToAll(pcol.." moves 2 houses into their Build Pool") end
@@ -1100,6 +1149,7 @@ function startPlayerTurn(pcol)
 		elseif action.action_id == "character" then char = true
 		end
 	end
+	if player.free_action then pool,move = true,true end
 	if palace then unplayedPalacesLock(pcol, false) end
 	if pool then buildPoolLock(pcol, false) end
 	if move then placedHousesLock(pcol, false) end
@@ -1194,7 +1244,10 @@ function playerDone(pcol)
 			elseif action.key == "move" then
 				log("TODO: finalize move action")
 			elseif action.key == "house" then
-				log("TODO: finalize house action")
+				log("TESTING: finalize house action")
+				local obj = getObjectFromGUID(action.guid)
+				removeFromPlayerBoard(obj)
+				player.placed_houses[obj.getGUID()] = obj.getPosition()
 			else
 				log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 				return
@@ -1307,6 +1360,28 @@ function playerUndo(pcol)
 		governorButtons(true)
 		getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="track"})
 		GD.game.players[pcol].governor_clicked = false
+		action.status = ""
+	elseif action.key == "house" then
+		log("TESTING: undoing build house action")
+		local obj = getObjectFromGUID(action.undo.guid)
+		obj.setPosition(action.undo.snapback.pos)
+		obj.setRotation(action.undo.snapback.rot)
+		obj.setLock(false)
+		local node = GD.network[action.undo.node_index]
+		if node.houses[1] and node.houses[1].g == action.guid then
+			node.houses[1] = nil
+		elseif node.houses[2] and node.houses[2].g == action.guid then
+			node.houses[2] = nil
+		else
+			log("*** ERROR: playerUndo() unable to clear house "..action.guid.."from network node "..tostring(action.undo.node_index))
+			return
+		end
+		if action.free_action then
+			getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="free-build-move"})
+		else
+			getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="house"})
+		end
+		action.status = ""
 	else
 		log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 		return
@@ -1365,6 +1440,20 @@ end
 
 --[[/////////////// Support functions /////////////////////]]
 
+function setActionDone(pcol, action_id)
+	local valid = false
+	for _,e in ipairs(GD.game.players[pcol].dial_actions) do
+		if e.action_id == action_id then
+			valid = true
+			e.status = "Done"
+		end
+	end
+	if not(valid) then
+		log("***ERROR: could not locate "..pcol.." dial action for "..tostring(action_id))
+		return
+	end
+end
+
 --[[ *****************************
 TODO: need this in a fn?
 ********************************]]
@@ -1415,8 +1504,13 @@ Set the locked state of a player's placed houses
 function placedHousesLock(pcol, locked)
 	if env.test.trace then log("placedHousesLock()") end
 	locked = locked or false
-	for _,e in ipairs(GD.game.players[pcol].placed_houses) do
-		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	for g,_ in pairs(GD.game.players[pcol].placed_houses) do
+		local o = getObjectFromGUID(g)
+		if o then
+			o.setLock(locked)
+		else
+			log("***ERROR: unable to unlock placed house for "..tostring(g))
+		end
 	end
 end
 
@@ -1485,7 +1579,6 @@ function removeFromPlayerBoard(obj)
 	if obj.memo == "palace" then
 		for i,data in ipairs(player.palaces) do
 			if data.g == obj.getGUID() then
-				-- table.remove(player.palaces, i)
 				player.palaces[i].g = nil
 				return
 			end
@@ -1493,7 +1586,6 @@ function removeFromPlayerBoard(obj)
 	else
 		for i,data in ipairs(player.pool) do
 			if data.g == obj.getGUID() then
-				-- table.remove(player.pool, i)
 				player.pool[i].g = nil
 				return
 			end
@@ -1502,11 +1594,25 @@ function removeFromPlayerBoard(obj)
 	log("*** WARN: could not find object "..obj.getGUID().." in "..obj.getName().." data")
 end
 
---[[ ********* TODO ??? **************
---TODO: thinking about this,
+--[[ *****************************
+Search all players placed object lists for this guid.
+Return snap pos if any, nil if not.
+--TODO: replace with list of placed guids for cheaper lookup?
 ********************************]]
-function isObjectPlaced(guid)
-	return false
+function placedObjSnap(guid)
+	if env.test.trace then log("placedObjSnap()") end
+	local obj = getObjectFromGUID(guid)
+	assert(obj, "***ERROR: placedObjSnap() unable to get object ref")
+	for _,pcol in ipairs(GD.game.player_order) do
+		local list = {}
+		if obj.memo == "house" then
+			list = GD.game.players[pcol].placed_houses
+		elseif obj.memo == "palace" then
+			list = GD.game.players[pcol].placed_palaces
+		end
+		if list[guid] then return list[guid] end
+	end
+	return nil
 end
 
 --[[ *********** TODO ??? ******************

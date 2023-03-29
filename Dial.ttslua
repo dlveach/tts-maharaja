@@ -34,40 +34,40 @@ g_back_decal = {
 }
 g_player_colors = {"Yellow","Red","Green","Blue","Purple"}
 
- g_actions = {
- 	["track"] = {
-    {id="track",label="Modify the Governor Track",},
-  },
- 	["coins"] = {
-    {id="gold",label="Get 2 Gold from the bank",},
-  },
- 	["character"] = {
-    {id="exchange",label="Exchange your Character",},
-  },
- 	["palace-house"] = {
-    {id="palace",label="Build a Palace (City)",},
-    {id="house",label="Build a House (City/Village)",},
-  },
- 	["palace"] = {
-    {id="palace",label="Build a Palace (City)",},
-  },
- 	["quarry"] = {
-    {id="quarry",label="Quarry 2 Houses into the pool",},
-  },
- 	["move"] = {
-    {id="move",label="Move a House City/Village",},
-  },
- 	["2houses"] = {
-    {id="city_house",label="Build a House (City)",},
-    {id="house",label="Build a House (City/Village)",},
-  },
- 	["house"] = {
-    {id="house",label="Build a House (City/Village)",},
-  },
-  ["free"] = {
-    {id="free-build-move",label="Free Build/Move House (City/Village)",},
-  },
-}
+-- g_actions = {
+--  	["track"] = {
+--     {id="track",label="Modify the Governor Track",},
+--   },
+--  	["coins"] = {
+--     {id="gold",label="Get 2 Gold from the bank",},
+--   },
+--  	["character"] = {
+--     {id="exchange",label="Exchange your Character",},
+--   },
+--  	["palace-house"] = {
+--     {id="palace",label="Build a Palace (City)",},
+--     {id="house",label="Build a House (City/Village)",},
+--   },
+--  	["palace"] = {
+--     {id="palace",label="Build a Palace (City)",},
+--   },
+--  	["quarry"] = {
+--     {id="quarry",label="Quarry 2 Houses into the pool",},
+--   },
+--  	["move"] = {
+--     {id="move",label="Move a House City/Village",},
+--   },
+--  	["2houses"] = {
+--     {id="city_house",label="Build a House (City)",},
+--     {id="house",label="Build a House (City/Village)",},
+--   },
+--  	["house"] = {
+--     {id="house",label="Build a House (City/Village)",},
+--   },
+--   ["free"] = {
+--     {id="free-build-move",label="Free Build/Move House (City/Village)",},
+--   },
+-- }
 
 env = {}
 
@@ -84,33 +84,28 @@ function onLoad(save_state)
     if env.test.trace then log(gid..": onLoad(): Loading from saved state") end
     local restore_data = JSON.decode(saved_data)
     GD = restore_data
-    updateUI() --handles most of the UI restore
-    --restore dial button panel state
-    self.UI.setAttribute("player_actions_panel","active",not(GD.state.flipped))
-    --restore back button panel state
-    if GD.state.stage == "actions_locked" or GD.state.stage == "actions_selected" then
-      self.UI.setAttribute("back_button_panel","active",false)
-    end
     self.UI.setAttribute("back_button_panel","visibility",GD.color)
-    --restore button visiblity
-    for _,btn in ipairs(g_buttons) do
-      self.UI.setAttribute(btn.."_panel","visibility",GD.color)
-    end
+    for i=1,9 do self.UI.setAttribute("dialBtnPnl_"..tostring(i),"visibility",GD.color) end
+    if GD.state.buttons_enabled then enableDialButtons() else disableDialButtons() end
+    if GD.state.back_button_enabled then enableBackButton() else disableBackButton() end
+    if GD.state.hidden then hideMe() else showMe() end
+    if GD.state.action_UI_enabled then enableActionUI() else disableActionUI() end
   else
     if env.test.trace then log(gid..": onLoad(): Loading from fresh state") end
     GD.state = {}
-    GD.state.actions = {}
     GD.state.click = 0
-    GD.state.stage = "select_actions"
     GD.state.flipped = self.is_face_down
-    --setup visibility string
+    GD.state.extra_action = false
+    GD.state.buttons_enabled = false
+    GD.state.hidden = true
+    GD.state.action_UI_enabled = false
+    --setup player visibility string for hiding self
     GD.hide_from_players = {}
     for _,pcol in ipairs(g_player_colors) do
       if pcol ~= GD.color then
         table.insert(GD.hide_from_players, pcol)
       end
     end
-    --setup dial decals
     self.setDecals({})
     local p = simpleDeepCopy(g_pointer)
     p.name = "pointer-1"
@@ -118,16 +113,11 @@ function onLoad(save_state)
     p.name = "pointer-2"
     self.addDecal(p)
     self.addDecal(g_back_decal)
-    --setup button visiblity
-    for _,btn in ipairs(g_buttons) do
-      self.UI.setAttribute(btn.."_panel","visibility",GD.color)
-    end
+    for i=1,9 do self.UI.setAttribute("dialBtnPnl_"..tostring(i),"visibility",GD.color) end
     self.UI.setAttribute("back_button_panel","visibility",GD.color)
-    if not(env.test.in_dev) then
-      -- resetPlayerButtons()
-      --TODO: anything?
+    for i=1,7 do
+      self.UI.setAttribute("row_action_"..tostring(i),"active",false)
     end
-    updateUI()
   end
 end
 
@@ -142,138 +132,156 @@ function onSave()
   return saved_data
 end
 
---[[ *****************************
+--[[ ******** DEPRECATED *********
 Update action UI panel based on current state.
 ********************************]]
 function updateUI()
-  if env.test.trace then log(gid..": updateUI()") end
-  for i=1,7 do
-    self.UI.setAttribute("row_action_"..tostring(i),"active",false)
-  end
-  for i,entry in ipairs(GD.state.actions) do
-    if entry.type == "selected" or entry.type == "extra" then
-      self.UI.setAttribute("action_text_"..tostring(i),"text",entry.label)
-      self.UI.setAttribute("action_text_"..tostring(i), "color", "rgb(1,1,0)")
-      self.UI.setAttribute("row_action_"..tostring(i),"active",true)
-      self.UI.setAttribute("status_text_"..tostring(i),"text",entry.status)
-      if entry.status == "Done" then
-        self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
-      elseif entry.status =="Incomplete" then
-        self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
-        self.UI.setAttribute("status_text_"..tostring(i), "color", "Red")
-      end
-    elseif entry.type == "free" then
-      self.UI.setAttribute("action_text_7","text",entry.label)
-      self.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
-      self.UI.setAttribute("row_action_7","active",true)
-      self.UI.setAttribute("status_text_7","text",entry.status)
-      if entry.status == "Done" then
-        self.UI.setAttribute("action_text_7", "color", "Gray")
-      -- elseif entry.status =="Incomplete" then  --TODO: free actions never incomlete???
-      --   self.UI.setAttribute("action_text_7", "color", "Gray")
-      --   self.UI.setAttribute("status_text_7", "color", "Red")
-      end
-    else
-      log("***WARN: unknown action entry type: "..tostring(entry.type))
-    end
-  end
+  log(gid..": ***WARN: updateUI() is deprecated")
+  -- if env.test.trace then log(gid..": updateUI()") end
+  -- for i=1,7 do
+  --   self.UI.setAttribute("row_action_"..tostring(i),"active",false)
+  -- end
+  -- for i,entry in ipairs(GD.state.actions) do
+  --   if entry.type == "selected" or entry.type == "extra" then
+  --     self.UI.setAttribute("action_text_"..tostring(i),"text",entry.label)
+  --     self.UI.setAttribute("action_text_"..tostring(i), "color", "rgb(1,1,0)")
+  --     self.UI.setAttribute("row_action_"..tostring(i),"active",true)
+  --     self.UI.setAttribute("status_text_"..tostring(i),"text",entry.status)
+  --     if entry.status == "Done" then
+  --       self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
+  --     elseif entry.status =="Incomplete" then
+  --       self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
+  --       self.UI.setAttribute("status_text_"..tostring(i), "color", "Red")
+  --     end
+  --   elseif entry.type == "free" then
+  --     self.UI.setAttribute("action_text_7","text",entry.label)
+  --     self.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
+  --     self.UI.setAttribute("row_action_7","active",true)
+  --     self.UI.setAttribute("status_text_7","text",entry.status)
+  --     if entry.status == "Done" then
+  --       self.UI.setAttribute("action_text_7", "color", "Gray")
+  --     end
+  --   else
+  --     log("***WARN: unknown action entry type: "..tostring(entry.type))
+  --   end
+  -- end
 end
 
 --[[ *****************************
-Clear action data and reset pointers to default.
+Reset pointers 1 & 2 rotation to default (180 deg).
+Remove Extra Action pointer if exists
 ********************************]]
-function resetActions()
-  if env.test.trace then log(gid..": resetActions()") end
+function reset()
+  if env.test.trace then log(gid..": reset()") end
   local decals = self.getDecals()
   local rot = self.getRotation()
-    assert(decals[1] ~= nil and decals[1].name == "pointer-1", gid..": ERROR: setPointerRotation(): Invalid pointer 1 decal")
-  assert(decals[2] ~= nil and decals[2].name == "pointer-2", gid..": ERROR: setPointerRotation(): Invalid pointer 2 decal")
+  local extra = -1
+  for i,decal in ipairs(decals) do
+    if i==1 then assert(decal.name == "pointer-1", gid..": ERROR: setPointerRotation(): Invalid pointer 1 decal") end
+    if i==2 then assert(decal.name == "pointer-2", gid..": ERROR: setPointerRotation(): Invalid pointer 2 decal") end
+    if decal.name == "pointer-extra" then extra = i end
+  end
   decals[1].rotation.z = rot.z + 180
   decals[2].rotation.z = rot.z + 180
+  if extra > 0 then table.remove(decals,extra) end
   self.setDecals(decals)
-  GD.state.actions = {}
 end
 
 --[[ *****************************
+Remove Extra Action pointer if exists
+********************************]]
+function removeExtraActionPointer()
+  local decals = self.getDecals()
+  local extra = -1
+  for i,decal in ipairs(decals) do
+    if decal.name == "pointer-extra" then extra = i end
+  end
+  if extra > 0 then table.remove(decals,extra) end
+  self.setDecals(decals)
+end
+
+--[[ ******* DEPRECATED *******
 Set this dial's state.  Called from Global.
 --TODO: document
 ********************************]]
 function setState(params)
-  if env.test.trace then log(gid..": setState()") end
-  if env.test.debug then log(params) end
-  if params.state == "select_actions" then
-    GD.state.stage = "select_actions"
-    if params.reset then resetActions() end
-    enableDialButtons()
-    hideMe()
-    if GD.state.flipped then flipMe() end
-  elseif params.state == "actions_selected" then
-    if not(GD.state.flipped) then flipMe() end
-    self.UI.setAttribute("back_button_panel","active",(params.modify ~= nil and params.modify))
-    GD.state.stage = "actions_selected"
-  elseif params.state == "actions_locked" then
-    self.UI.setAttribute("back_button_panel","active",false)
-    if not(GD.state.flipped) then flipMe() end
-    GD.state.stage = "actions_locked"
-    showMe()
-  elseif params.state =="extra_action" then
-    GD.state.stage = "extra_action"
-    enableDialButtons()
+  log(gid..": setState() is deprecated")
 
-    --TODO: what about during a player turn?
-
-    if GD.state.flipped then flipMe() end
-  elseif params.state == "player_turn" then
-    GD.state.stage = "player_turn"
-    log("flipped state = "..tostring(GD.state.flipped))
-    self.UI.setAttribute("back_button_panel","active",false)
-    self.UI.setAttribute("player_actions_panel","visibility","")
-    disableDialButtons()
-    showMe()
-    if GD.state.flipped then flipMe() end
-  elseif params.state == "game_start" then
-    if not(GD.state.flipped) then flipMe() end
-    disableDialButtons()
-		showMe()
-  elseif params.state == "free_action" then
-    local entry = {
-      type = "free",
-      action_id = g_actions["free"][1].id,
-      label = g_actions["free"][1].label,
-      status = ""
-    }
-    table.insert(GD.state.actions, entry)
-    updateUI()
-  elseif params.state == "complete_action" then
-    local action_id = params.action_id
-    for _,action in ipairs(GD.state.actions) do
-      if action.action_id == params.action_id and action.status ~= "Done" then
-        action.status = "Done"
-        updateUI()
-        break
-      end
-    end
-  elseif params.state == "undo_action" then
-    local action_id = params.action_id
-    for _,action in ipairs(GD.state.actions) do
-      if action.action_id == params.action_id and action.status == "Done" then
-        action.status = ""
-        updateUI()
-        break
-      end
-    end
-  elseif params.state == "fail_action" then
-    local action_id = params.action_id
-    for _,action in ipairs(GD.state.actions) do
-      if action.action_id == params.action_id and action.status ~= "Incomplete" then
-        action.status = "Incomplete"
-        updateUI()
-        break
-      end
-    end
-  else
-    log(gid..": ERROR: setState() unknown state: "..tostring(params.state))
-  end
+  -- if env.test.trace then log(gid..": setState()") end
+  -- if env.test.debug then log(params) end
+  -- if params.state == "select_actions" then
+  --   GD.state.stage = "select_actions"
+  --   if params.reset then resetActions() end
+  --   enableDialButtons()
+  --   hideMe()
+  --   if GD.state.flipped then flipMe() end
+  -- elseif params.state == "actions_selected" then
+  --   if not(GD.state.flipped) then flipMe() end
+  --   self.UI.setAttribute("back_button_panel","active",(params.modify ~= nil and params.modify))
+  --   GD.state.stage = "actions_selected"
+  -- elseif params.state == "actions_locked" then
+  --   self.UI.setAttribute("back_button_panel","active",false)
+  --   if not(GD.state.flipped) then flipMe() end
+  --   GD.state.stage = "actions_locked"
+  --   showMe()
+  -- elseif params.state =="extra_action" then
+  --   GD.state.stage = "extra_action"
+  --   enableDialButtons()
+  --
+  --   --TODO: what about during a player turn?
+  --
+  --   if GD.state.flipped then flipMe() end
+  -- elseif params.state == "player_turn" then
+  --   GD.state.stage = "player_turn"
+  --   log("flipped state = "..tostring(GD.state.flipped))
+  --   self.UI.setAttribute("back_button_panel","active",false)
+  --   self.UI.setAttribute("player_actions_panel","visibility","")
+  --   disableDialButtons()
+  --   showMe()
+  --   if GD.state.flipped then flipMe() end
+  -- elseif params.state == "game_start" then
+  --   if not(GD.state.flipped) then flipMe() end
+  --   disableDialButtons()
+	-- 	showMe()
+  -- elseif params.state == "free_action" then
+  --   local entry = {
+  --     type = "free",
+  --     action_id = g_actions["free"][1].id,
+  --     label = g_actions["free"][1].label,
+  --     status = ""
+  --   }
+  --   table.insert(GD.state.actions, entry)
+  --   updateUI()
+  -- elseif params.state == "complete_action" then
+  --   local action_id = params.action_id
+  --   for _,action in ipairs(GD.state.actions) do
+  --     if action.action_id == params.action_id and action.status ~= "Done" then
+  --       action.status = "Done"
+  --       updateUI()
+  --       break
+  --     end
+  --   end
+  -- elseif params.state == "undo_action" then
+  --   local action_id = params.action_id
+  --   for _,action in ipairs(GD.state.actions) do
+  --     if action.action_id == params.action_id and action.status == "Done" then
+  --       action.status = ""
+  --       updateUI()
+  --       break
+  --     end
+  --   end
+  -- elseif params.state == "fail_action" then
+  --   local action_id = params.action_id
+  --   for _,action in ipairs(GD.state.actions) do
+  --     if action.action_id == params.action_id and action.status ~= "Incomplete" then
+  --       action.status = "Incomplete"
+  --       updateUI()
+  --       break
+  --     end
+  --   end
+  -- else
+  --   log(gid..": ERROR: setState() unknown state: "..tostring(params.state))
+  -- end
 end
 
 --[[ *****************************
@@ -281,9 +289,10 @@ Enable dial buttons.
 ********************************]]
 function enableDialButtons()
   if env.test.trace then log(gid..": enableDialButtons()") end
-  for _,action in ipairs(g_buttons) do
-    self.UI.setAttribute(action.."_panel","active","true")
+  for i=1,9 do
+    self.UI.setAttribute("dialBtnPnl_"..tostring(i),"active",true)
   end
+  GD.state.buttons_enabled = true
 end
 
 --[[ *****************************
@@ -291,26 +300,64 @@ Disable dial buttons.
 ********************************]]
 function disableDialButtons()
   if env.test.trace then log(gid..": disableDialButtons()") end
-  for _,action in ipairs(g_buttons) do
-    self.UI.setAttribute(action.."_panel","active","false")
+  for i=1,9 do
+    self.UI.setAttribute("dialBtnPnl_"..tostring(i),"active",false)
   end
+  GD.state.buttons_enabled = false
 end
 
 --[[ *****************************
+Enable dial back button (Modify).
+********************************]]
+function enableBackButton()
+  if env.test.trace then log(gid..": enableBackButton()") end
+  self.UI.setAttribute("back_button_panel","active",true)
+  GD.state.back_button_enabled = true
+end
+
+--[[ *****************************
+Disable dial back button (Modify).
+********************************]]
+function disableBackButton()
+  if env.test.trace then log(gid..": disableBackButton()") end
+  self.UI.setAttribute("back_button_panel","active",false)
+  GD.state.back_button_enabled = false
+end
+
+--[[ *****************************
+Enable dial action UI
+********************************]]
+function enableActionUI()
+  if env.test.trace then log(gid..": enableActionUI()") end
+  self.UI.setAttribute("player_actions_panel","active",true)
+  GD.state.action_UI_enabled = true
+end
+
+--[[ *****************************
+Disable dial action UI
+********************************]]
+function disableActionUI()
+  if env.test.trace then log(gid..": enableActionUI()") end
+  self.UI.setAttribute("player_actions_panel","active",false)
+  GD.state.action_UI_enabled = false
+end
+
+--[[ ******* TODO DEPRECATED *******
 Handler for modify button click (back of dial).
 Flip face up and set state back to action selection.
 Clears actions in player data (Global)
 ********************************]]
 function modifyClick(player, btn, id)
-  if env.test.trace then log(gid..": modifyClick(): id="..tostring(id)) end
-  if player.color ~= GD.color then return end
-  hideMe()
-  enableDialButtons()
-  flipMe()
-  --call Global to clear player data & disable Done
-  local p = {command="clear", player_color=player.color,}
-  Global.call("updatePlayerActionSelection",p)
-  GD.state.stage = "select_actions"
+  log("modifyClick is DEPRECATED")
+  -- if env.test.trace then log(gid..": modifyClick(): id="..tostring(id)) end
+  -- if player.color ~= GD.color then return end
+  -- hideMe()
+  -- enableDialButtons()
+  -- flipMe()
+  -- --call Global to clear player data & disable Done
+  -- local p = {command="clear", player_color=player.color,}
+  -- Global.call("updatePlayerActionSelection",p)
+  -- GD.state.stage = "select_actions"
 end
 
 --[[ *****************************
@@ -319,52 +366,29 @@ Player is selecting actions on dial.
 ********************************]]
 function dialClick(player, btn, id)
   if env.test.trace then log(gid..": dialClick(): id="..tostring(id)) end
-  local mnemonic = Split(id,'_')[1]
-  local dial_index = indexOf(g_buttons,mnemonic)
-  assert(dial_index > 0, gid..": ERROR: dialClick() no button dial_index found for action")
-  local actions = g_actions[mnemonic]
-  assert(actions, gid..": ERROR: dialClick() no action(s) for mnemonic "..tostring(mnemonic))
-  local id = ""
-
-  if GD.state.stage =="extra_action" then
-    --TODO: handle this
-    log(gid..": TODO: dialClick() handle extra action click")
-
-  elseif GD.state.stage == "select_actions" then
-    if GD.state.click == 1 or GD.state.click == 0 then
-      id = "pointer-1"
-      GD.state.click = 2
-    elseif GD.state.click == 2 then
-      id = "pointer-2"
-      GD.state.click = 1
-      done = true
-    else
-      log(gid..": ERROR: dialClick() invalid click state")
-      return
-    end
-    --remove existing "pointer-n" actions if any exist
-    for i=#GD.state.actions,1,-1 do
-      if GD.state.actions[i].dial_pointer == id then
-        table.remove(GD.state.actions, i)
-      end
-    end
-    for _,action in ipairs(actions) do
-      local entry = {
-        type = "selected",
-        dial_pointer = id,
-        action_id = action.id,
-        label = action.label,
-        status = ""
-      }
-      table.insert(GD.state.actions, entry)
-      Global.call("updatePlayerActionSelection",{command="update",player_color=GD.color,actions=GD.state.actions})
-    end
-    setPointerRotation(id, dial_index)
-    updateUI()
-    if toboolean(self.UI.getAttribute("player_actions_panel","active")) == false then
-      self.UI.setAttribute("player_actions_panel","active",true)
-    end
+  -- local mnemonic = Split(id,'_')[1]
+  local dial_index = tonumber(Split(id,'_')[2])
+  assert(dial_index, gid..": ERROR: dialClick() no button dial_index found, btn id: "..tostring(id))
+  local pointer_id = ""
+  if GD.state.extra_action then
+    pointer_id = "pointer-extra"
+  elseif GD.state.click == 1 or GD.state.click == 0 then
+    pointer_id = "pointer-1"
+    GD.state.click = 2
+  elseif GD.state.click == 2 then
+    pointer_id = "pointer-2"
+    GD.state.click = 1
+  else
+    log(gid..": ERROR: dialClick() invalid click state")
+    return
   end
+  local p = {
+    player_color = player.color,
+    dial_index = dial_index,
+    pointer_id = pointer_id
+  }
+  setPointerRotation(pointer_id, dial_index)
+  Global.call("addDialAction",p)
 end
 
 --[[ *****************************
@@ -372,7 +396,7 @@ Set Pointer rotation.
 index: into module global list of rotation values.
 ********************************]]
 function setPointerRotation(id, index)
-  if env.test.trace then log(gid..":setPointerRotation() index = "..tostring(index)) end
+  if env.test.trace then log(gid..":setPointerRotation() id = "..tostring(id)..", index = "..tostring(index)) end
   local decals = self.getDecals()
   local rot = self.getRotation()
   local offset = g_pointer_rot_offsets[index]
@@ -397,6 +421,7 @@ function hideMe()
   if env.test.trace then log(gid..":hideMe()") end
   self.setInvisibleTo(GD.hide_from_players)
   self.UI.setAttribute("player_actions_panel", "visibility", GD.color)
+  GD.state.hidden = true
 end
 
 --[[ *****************************
@@ -406,6 +431,7 @@ function showMe()
   if env.test.trace then log(gid..":showMe()") end
   self.setInvisibleTo({})
   self.UI.setAttribute("player_actions_panel", "visibility", "")
+  GD.state.hidden = false
 end
 
 --[[ *****************************

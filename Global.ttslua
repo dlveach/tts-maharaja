@@ -136,14 +136,25 @@ function restoreGameState()
 		setupStatusPanel()
 		updateGovernorTrack()
 		updateStatusPanel()
+		for _,pcol in ipairs(GD.game.player_order) do
+			if GD.game.players[pcol].dial_actions ~= nil then updateDialUI(pcol) end
+			if GD.game.stage == "select_actions" then
+				local dial = getObjectFromGUID(C.action_dials[pcol])
+				dial.call("enableDialButtons")
+				dial.call("hideMe")
+				if dial.is_face_down then dial.call("flipMe") end
+			elseif GD.game.stage == "player_turns" then
+				--TODO: this
+				log("TODO: handle restore during player_turns game stage <----------------")
+			end
+		end
 	end
 
 	--TODO: replay global UI setattributes
 
 	--TODO: replay main board UI setattributes
 
-	--NOTE: UI restore for all dials handled in dial onLoad()
-	--NOTE: UI restore for all player boards handled in board onLoad()
+	--TODO: confirm UI restore for all player boards handled in board onLoad() ???
 
 	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
 end
@@ -235,17 +246,6 @@ function governorClick(player, btn, id)
 	if player.color ~= GD.game.current_player_color then return end
 	if GD.game.players[player.color].governor_clicked then return end --guard double clicks
 	GD.game.players[player.color].governor_clicked = true
-	-- local valid = false
-	-- for _,e in ipairs(GD.game.players[player.color].dial_actions) do
-	-- 	if e.action_id == "track" then
-	-- 		valid = true
-	-- 		e.status = "Done"
-	-- 	end
-	-- end
-	-- if not(valid) then
-	-- 	log("***ERROR: could not locate dial action for governorClick()")
-	-- 	return
-	-- end
 	setActionDone(player.color, "track")
 	local track = GD.game.governor_track
 	-- build a pending action and store current order in undo
@@ -285,7 +285,11 @@ function governorClick(player, btn, id)
 	updateGovernorTrack()
 	updateStatusPanel()
 	governorButtons(false)
-	getObjectFromGUID(C.action_dials[player.color]).call("setState",{state="complete_action",action_id="track"})
+
+	-- getObjectFromGUID(C.action_dials[player.color]).call("setState",{state="complete_action",action_id="track"})
+	--TODO: refactor for new dial design
+	log("TODO: refactor governorClick() for new dial design. <--------------")
+
 	getObjectFromGUID(C.player_boards[player.color]).call("setState",{undo=true})
 end
 
@@ -417,6 +421,21 @@ function penaltyDialog(player, btn, id)
 		return
 	end
 	UI.setAttribute("end_turn_pnl","visibility","Pink")
+end
+
+--[[ *****************************
+Handler for modify button click (back of dial).
+Flip dial face up and set state back to action selection.
+Enable done button on player board.
+********************************]]
+function dialModifyClick(player, btn, id)
+	if env.test.trace then log("dialModifyClick(): id="..tostring(id)) end
+  -- if player.color ~= GD.color then return end
+	local dial = getObjectFromGUID(C.action_dials[player.color])
+	dial.call("hideMe")
+	dial.call("enableDialButtons")
+	if dial.is_face_down then dial.call("flipMe") end
+	getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true,undo=false})
 end
 
 --[[/////////////// Game Setup /////////////////////]]
@@ -729,7 +748,8 @@ function coroFillPlayerBoards()
 		local dial = getObjectFromGUID(C.action_dials[pcol])
 		assert(dial, "*** ERROR: coroFillPlayerBoards(): no dial object for color "..tostring(pcol))
 		dial.tooltip = false
-		dial.call("setState",{state="game_start"})
+		dial.call("disableDialButtons")
+		dial.call("showMe")
 	end
 
 	--setup for next game stage
@@ -892,7 +912,10 @@ function beginNextRound()
 	for pcol,pdata in pairs(GD.game.players) do
 		pdata.has_actions = true
 		local dial = getObjectFromGUID(C.action_dials[pcol])
-		dial.call("setState",{state="select_actions",reset=true})
+		dial.call("reset")
+		dial.call("enableDialButtons")
+		dial.call("hideMe")
+		if dial.is_face_down then dial.call("flipMe") end
 		local txt = "Secretly choose turn actions and confirm with Done.\n"
 		txt = txt .. "Player turns will begin once all have confirmed.\n"
 		txt = txt .. "Until then selections can be modified."
@@ -1051,9 +1074,13 @@ function houseDrop(pcol, obj)
 			end
 			table.insert(GD.game.players[pcol].pending_actions, action)
 			if action.free_action then
-				getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id="free-build-move"})
+				-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id="free-build-move"})
+				--TODO: refactor for new dial design
+				log("TODO: refactor houseDrop() for new dial design. <--------------")
 			else
-				getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id=action_key})
+				-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="complete_action",action_id=action_key})
+				--TODO: refactor for new dial design
+				log("TODO: refactor houseDrop() for new dial design. <--------------")
 			end
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
 			if not(GD.game.players[pcol].free_action) then
@@ -1093,7 +1120,13 @@ function startPlayerTurn(pcol)
 	player.free_action = false
 	if GD.env.verbose then printToAll("Starting turn for player "..pcol) end
 	local dial = getObjectFromGUID(C.action_dials[pcol])
-	Wait.condition(function() dial.call("setState",{state="player_turn"}) end,
+	Wait.condition(
+		function()
+			dial.call("disableDialButtons")
+			dial.call("disableBackButton")
+			dial.call("showMe")
+			if dial.is_face_down then dial.call("flipMe") end
+		end,
 		function() return(dial.resting) end, 5) --HACK: might be flipping from lock actions call so wait
 	--unlock pawn
 	getObjectFromGUID(C.player_pawns[pcol]).setLock(false)
@@ -1104,18 +1137,20 @@ function startPlayerTurn(pcol)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{extra_actions=player.extra_actions})
 		if GD.env.verbose then printToAll(pcol.." +1 extra action token for the Yogi") end
 	elseif player.character_id == 6 then
-		if env.test.debug then log("Setting player "..pcol.." discounted palace build cost to 9") end
 		player.character_bonus = "build_palace_discount"
 	elseif player.character_id == 5 then
-		dial.call("setState",{state="free_action"})
+		log("adding free build/move action for player "..tostring(pcol))
+		player.dial_actions["free-action"] = {
+			id = "free",
+			actions = {
+				{id = "free", label="Free Build/Move House", status = "",},
+			},
+		}
 		player.free_action = true
-		if env.test.debug then log("Setting player "..pcol.." free Architect travel") end
 		player.character_bonus = "free_build_move"
 	elseif player.character_id == 4 then
-		if env.test.debug then log("Setting player "..pcol.." free Architect travel") end
 		player.character_bonus = "free_travel"
 	elseif player.character_id == 3 then
-		if env.test.debug then log("Setting player "..pcol.." outer palace score == 2") end
 		player.character_bonus = "outer_palace_scoring"
 	elseif player.character_id == 2 then
 		player.gold = player.gold + 1
@@ -1124,29 +1159,27 @@ function startPlayerTurn(pcol)
 	end
 	--execute any immediate actions, set pawn, house, palace lock state based on actions selected
 	local palace,pool,move,track,char = false,false,false,false,false
-	for _,action in ipairs(player.dial_actions) do
-		if action.action_id == "gold" then
-			player.gold = player.gold + 2
-			dial.call("setState",{state="complete_action",action_id="gold"})
-			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
-			if GD.env.verbose then printToAll(pcol.." +2 gold for Coins action") end
-			action.status = "Done"
-		elseif action.action_id == "quarry" then
-			if quarryAction(pcol) then
-				dial.call("setState",{state="complete_action",action_id="quarry"})
-				if GD.env.verbose then printToAll(pcol.." moves 2 houses into their Build Pool") end
+	for _,dial_action in pairs(player.dial_actions) do
+		for _,action in ipairs(dial_action.actions) do
+			if action.action_id == "gold" then
+				player.gold = player.gold + 2
+				getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+				if GD.env.verbose then printToAll(pcol.." +2 gold for Coins action") end
 				action.status = "Done"
-			else
-				dial.call("setState",{state="fail_action",action_id="quarry"})
-				if GD.env.verbose then printToAll(pcol.." is unable to complete selected Quarry action!") end
-				-- player.failed_actions = true
-				action.status = "Failed"
+			elseif action.action_id == "quarry" then
+				if quarryAction(pcol) then
+					if GD.env.verbose then printToAll(pcol.." moves 2 houses into their Build Pool") end
+					action.status = "Done"
+				else
+					if GD.env.verbose then printToAll(pcol.." is unable to complete selected Quarry action!") end
+					action.status = "Failed"
+				end
+			elseif action.action_id == "palace" then palace = true
+			elseif action.action_id == "house" or action.action_id == "free" then pool = true
+			elseif action.action_id == "move" or action.action_id == "free" then move = true
+			elseif action.action_id == "track" then track = true
+			elseif action.action_id == "character" then char = true
 			end
-		elseif action.action_id == "palace" then palace = true
-		elseif action.action_id == "house" or action.action_id == "free" then pool = true
-		elseif action.action_id == "move" or action.action_id == "free" then move = true
-		elseif action.action_id == "track" then track = true
-		elseif action.action_id == "character" then char = true
 		end
 	end
 	if player.free_action then pool,move = true,true end
@@ -1155,6 +1188,7 @@ function startPlayerTurn(pcol)
 	if move then placedHousesLock(pcol, false) end
 	if track then governorButtons(true) end
 	if char then charactersLock(pcol, false) end
+	updateDialUI(pcol)
 	--enable player board for actions
 	local txt = "Execute actions in any order.\n"
 	txt = txt.."May move Architect at any time.\n"
@@ -1195,14 +1229,9 @@ function playerDone(pcol)
 			else
 			log("Player clicked Done during action selection")
 			local p1,p2 = false,false
-			for _,action in ipairs(player.dial_actions) do
-				if action.dial_pointer == "pointer-1" then p1 = true end
-				if action.dial_pointer == "pointer-2" then p2 = true end
-			end
-			if not(p1 and p2) then
-				lob("*** WARN: playerDone() two player action selections have not been made")
-				return
-			end
+			if player.dial_actions["pointer-1"] ~= nil then p1 = true end
+			if player.dial_actions["pointer-2"] ~= nil then p2 = true end
+			assert(p1 and p2, "***ERROR: playerDone() two player action selections have not been made")  --TODO: is this really needed?
 			player.actions_set = true
 			local all_set = true
 			for _,pdata in pairs(GD.game.players) do
@@ -1211,14 +1240,19 @@ function playerDone(pcol)
 			if all_set then
 				broadcastToAll("All players have set actions, starting player turns")
 				for _,pcol in ipairs(GD.game.player_order) do
-					getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="actions_locked"})
+					-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="actions_locked"})
+					local dial = getObjectFromGUID(C.action_dials[pcol])
+					dial.call("disableBackButton")
+					if not(dial.is_face_down) then dial.call("flipMe") end
 					getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false,help=false})
 				end
 				GD.game.stage = "player_turns"
 				startPlayerTurn(setNextPlayer(FIRST))
 			else
 				local dial = getObjectFromGUID(C.action_dials[pcol])
-				dial.call("setState",{state="actions_selected",modify=true})
+				dial.call("enableBackButton")
+				dial.call("disableDialButtons")
+				if not(dial.is_face_down) then dial.call("flipMe") end
 				getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false})
 			end
 		end
@@ -1358,7 +1392,12 @@ function playerUndo(pcol)
 		updateGovernorTrack()
 		updateStatusPanel()
 		governorButtons(true)
-		getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="track"})
+
+		-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="track"})
+		--TODO: refactor for new dial design
+		--TODO: update actions in player
+		log("TODO: refactor playerUndo() for new dial design")
+
 		GD.game.players[pcol].governor_clicked = false
 		action.status = ""
 	elseif action.key == "house" then
@@ -1377,9 +1416,19 @@ function playerUndo(pcol)
 			return
 		end
 		if action.free_action then
-			getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="free-build-move"})
+
+			-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="free-build-move"})
+			--TODO: refactor for new dial design
+			--TODO: update actions in player
+			log("TODO: refactor playerUndo() for new dial design")
+
 		else
-			getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="house"})
+
+			-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="house"})
+			--TODO: refactor for new dial design
+			--TODO: update actions in player
+			log("TODO: refactor playerUndo() for new dial design")
+
 		end
 		action.status = ""
 	else
@@ -1780,9 +1829,51 @@ function governorButtons(on)
 	Wait.frames(function() reloadUI(C.board_guid) end, 60)
 end
 
+--[[ *****************************
+Update the dial UI for a player with player's current action state
+********************************]]
+function updateDialUI(pcol)
+	if env.test.trace then log("updateDialUI() "..tostring(pcol)) end
+	local player = GD.game.players[pcol]
+	local dial = getObjectFromGUID(C.action_dials[pcol])
+	for i=1,7 do
+		dial.UI.setAttribute("row_action_"..tostring(i),"active",false)
+	end
+	local row = 0
+	for id,dial_action in pairs(player.dial_actions) do
+		log("updating dial UI with dial_action: "..tostring(id))
+		log(dial_action)
+		if id == "free-action" then
+			local action = dial_action.actions[1]
+			log(action)
+			dial.UI.setAttribute("action_text_7", "text", action.label)
+			dial.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
+			dial.UI.setAttribute("row_action_7", "active", true)
+			dial.UI.setAttribute("status_text_7", "text", action.status)
+			if action.status == "Done" then
+				dial.UI.setAttribute("action_text_7", "color", "Gray")
+			end
+		else
+			for i,action in ipairs(dial_action.actions) do
+				row = row + 1
+				dial.UI.setAttribute("action_text_"..tostring(row), "text", action.label)
+				dial.UI.setAttribute("action_text_"..tostring(row), "color", "rgb(1,1,0)")
+		    dial.UI.setAttribute("row_action_"..tostring(row), "active", true)
+	      dial.UI.setAttribute("status_text_"..tostring(row), "text", action.status)
+	      if action.status == "Done" then
+	        dial.UI.setAttribute("action_text_"..tostring(row), "color", "Gray")
+	      elseif action.status == "Incomplete" then
+	        dial.UI.setAttribute("action_text_"..tostring(row), "color", "Gray")
+	        dial.UI.setAttribute("status_text_"..tostring(row), "color", "Red")
+	      end
+			end
+		end
+	end
+end
+
 --[[/////////////// External call functions /////////////////////]]
 
---[[ ***************************
+--[[ ****** TODO: DEPRECATED *********
 Called from player dial during player action selection.
 params:
 	- command:
@@ -1792,35 +1883,42 @@ params:
 		actions: The list of actions for an update (command==set)
 ********************************]]
 function updatePlayerActionSelection(params)
-	if env.test.trace then log("updatePlayerActionSelection()") end
+		log("***WARN: updatePlayerActionSelection() is deprecated")
+end
+
+--[[ ***************************
+Called from player dial during player action selection.
+Update player's data with selected action on dial.
+Enable Done if actions for both pointer 1 and 2 are set.
+params:
+		player_color: The player color.
+		dial_index: The index on the dial of the selected action
+			1-9
+		pointer_id: the id of the dial pointer
+			'pointer-1', 'pointer-2', 'pointer-extra'
+********************************]]
+function addDialAction(params)
+	if env.test.trace then log("addDialAction()") end
+	assert(params, "***ERROR addDialAction(): missing params")
 	if env.test.debug then log(params) end
 	local pcol = params.player_color
-	assert(pcol,"updatePlayerActionSelection(): missing player color")
-	if params.command == "clear" then
-		GD.game.players[pcol].actions_set = false
-		GD.game.players[pcol].dial_actions = {}
-		local player_board = getObjectFromGUID(C.player_boards[pcol])
-		player_board.call("setState",{done=false})
-	elseif params.command == "update" then
-		assert(params,"updatePlayerActionSelection(): missing params")
-		assert(pcol,"updatePlayerActionSelection(): missing player color")
-		assert(params.actions,"updatePlayerActionSelection(): missing action list")
-		GD.game.players[pcol].dial_actions = simpleDeepCopy(params.actions)
-		--enable done button for player if both actions are set
-		local p1,p2 = false,false
-		for _,action in ipairs(GD.game.players[pcol].dial_actions) do
-			if action.dial_pointer == "pointer-1" then p1 = true
-			elseif action.dial_pointer == "pointer-2" then p2 = true
-			end
-		end
-		if p1 and p2 then
-			local player_board = getObjectFromGUID(C.player_boards[pcol])
-			player_board.call("setState",{done=true})
-		end
-	else
-		log("*** ERROR: unknown command parameter: "..tostring(params.command))
-		return
+	assert(pcol,"***ERROR addDialAction(): missing player_color param")
+	local dial_index = params.dial_index
+	assert(dial_index, "***ERROR addDialAction(): missing dial_index param")
+	local pointer_id = params.pointer_id
+	assert(pointer_id, "***ERROR addDialAction(): missing pointer_id param")
+	local player = GD.game.players[pcol]
+	local dial_action = simpleDeepCopy(C.dial_actions[dial_index])
+	assert(dial_action, "***ERROR udpateDialActions(): no action for index "..tostring(dial_index))
+	for _,a in ipairs(dial_action.actions) do
+		a.status = ""
 	end
+	player.dial_actions[pointer_id] = dial_action
+	if player.dial_actions["pointer-1"] ~= nil and player.dial_actions["pointer-2"] ~= nil then
+		local player_board = getObjectFromGUID(C.player_boards[pcol])
+		player_board.call("setState",{done=true})
+	end
+	updateDialUI(pcol)
 end
 
 --[[/////////////// DEVELOPMENTAL STUFF ///////////////////////]]

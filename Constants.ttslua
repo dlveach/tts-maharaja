@@ -214,3 +214,69 @@ C.player_data = {
   status_panel = true,
   pawn_location = {},
 }
+
+--action dial STUFF
+C.dial_actions = {
+  {
+    id="track",
+    actions = {
+      {id="track",label="Modify the Governor Track",},
+    },
+  },
+  {
+    id="gold",
+    actions = {
+      {id="gold",label="Get 2 Gold from the bank",},
+    },
+  },
+ 	{
+    id="character",
+    actions = {
+      {id="exchange",label="Exchange your Character",},
+    },
+  },
+  {
+    id="palace-build",
+    actions = {
+      {id="palace",label="Build a Palace (City)",},
+      {id="build",label="Build a House (City/Village)",},
+    },
+  },
+ 	{
+    id="palace",
+    actions = {
+      {id="palace",label="Build a Palace (City)",},
+    }
+  },
+  {
+    id="quarry",
+    actions = {
+      {id="quarry",label="Quarry 2 Houses into the pool",},
+    },
+  },
+  {
+    id="move",
+    actions = {
+      {id="move",label="Move a House City/Village",},
+    },
+  },
+  {
+    id="build2",
+    actions = {
+      {id="build-city",label="Build a House (City)",},
+      {id="build",label="Build a House (City/Village)",},
+    },
+  },
+  {
+    id="build",
+    actions = {
+      {id="build",label="Build a House (City/Village)",},
+    },
+  },
+  {
+    id="free",
+    actions = {
+      {id="free-build-move",label="Free Build/Move House (City/Village)",},
+    },
+  },
+}

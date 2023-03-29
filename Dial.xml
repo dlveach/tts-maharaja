@@ -36,9 +36,10 @@
         hoverClass="hover"
         pressClass="press"
         selectClass="select"
-        onClick="modifyClick"
+        onClick="Global/dialModifyClick"
         image="Sprites/Layout/Button"
         color="Blue" />
+
   <Button class="hover"
         color="Cyan" />
   <Button class="press"
@@ -157,40 +158,40 @@
   </Panel>
 </Panel>
 
-<Panel class="buttonPanel" id="track_panel" position="0 140 -10" >
-  <Button class="dialButton" id="track_btn" />
+<Panel class="buttonPanel" id="dialBtnPnl_1" position="0 140 -10" >
+  <Button class="dialButton" id="dialBtn_1" />
 </Panel>
 
-<Panel class="buttonPanel" id="coins_panel" position="90 100 -10" >
-  <Button class="dialButton" id="coins_btn" />
+<Panel class="buttonPanel" id="dialBtnPnl_2" position="90 100 -10" >
+  <Button class="dialButton" id="dialBtn_2" />
 </Panel>
 
-<Panel class="buttonPanel" id="character_panel" position="140 20 -10" >
-  <Button class="dialButton" id="character_btn"/>
+<Panel class="buttonPanel" id="dialBtnPnl_3" position="140 20 -10" >
+  <Button class="dialButton" id="dialBtn_3"/>
 </Panel>
 
-<Panel class="buttonPanel" id="palace-house_panel" position="130 -80 -10" >
-  <Button class="dialButton" id="palace-house_btn"/>
+<Panel class="buttonPanel" id="dialBtnPnl_4" position="130 -80 -10" >
+  <Button class="dialButton" id="dialBtn_4"/>
 </Panel>
 
-<Panel class="buttonPanel" id="palace_panel" position="60 -140 -10" >
-  <Button class="dialButton" id="palace_btn"/>
+<Panel class="buttonPanel" id="dialBtnPnl_5" position="60 -140 -10" >
+  <Button class="dialButton" id="dialBtn_5"/>
 </Panel>
 
-<Panel class="buttonPanel" id="quarry_panel" position="-40 -140 -10" >
-  <Button class="dialButton" id="quarry_btn"/>
+<Panel class="buttonPanel" id="dialBtnPnl_6" position="-40 -140 -10" >
+  <Button class="dialButton" id="dialBtn_6"/>
 </Panel>
 
-<Panel class="buttonPanel" id="move_panel" position="-120 -80 -10" >
-  <Button class="dialButton" id="move_btn"/>
+<Panel class="buttonPanel" id="dialBtnPnl_7" position="-120 -80 -10" >
+  <Button class="dialButton" id="dialBtn_7"/>
 </Panel>
 
-<Panel class="buttonPanel" id="2houses_panel" position="-140 20 -10" >
-  <Button class="dialButton" id="2houses_btn"/>
+<Panel class="buttonPanel" id="dialBtnPnl_8" position="-140 20 -10" >
+  <Button class="dialButton" id="dialBtn_8"/>
 </Panel>
 
-<Panel class="buttonPanel" id="house_panel" position="-90 100 -10" >
-  <Button class="dialButton" id="house_btn"/>
+<Panel class="buttonPanel" id="dialBtnPnl_9" position="-90 100 -10" >
+  <Button class="dialButton" id="dialBtn_9"/>
 </Panel>
 
 </XmlLayout>

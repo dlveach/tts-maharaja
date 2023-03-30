@@ -68,7 +68,7 @@
 
 </Defaults>
 
-<Panel id="end_turn_pnl"  active="false"
+<Panel id="penalty_dialog_pnl"  active="false"
   height="220" width="420"
   padding="10 10 10 10"
   color="#003699"
@@ -91,8 +91,8 @@
         <Cell padding="25 25 20 5">
           <HorizontalLayout
             spacing="40">
-            <Button id="end_turn_ok" onClick="penaltyDialog" fontSize="20" text="OK"/>
-            <Button id="end_turn_cancel" onClick="penaltyDialog" fontSize="20" text="Cancel"/>
+            <Button id="end_turn_ok" onClick="penaltyDialogBtn" fontSize="20" text="OK"/>
+            <Button id="end_turn_cancel" onClick="penaltyDialogBtn" fontSize="20" text="Cancel"/>
           </HorizontalLayout>
         </Cell>
       </Row>

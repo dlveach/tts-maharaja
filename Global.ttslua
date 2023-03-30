@@ -70,8 +70,8 @@ function onLoad(save_state)
 			getObjectFromGUID(g).setInvisibleTo(Color.list)
 		end
 	end
-	UI.setAttribute("end_turn_pnl","visibility","Pink")
-	UI.setAttribute("end_turn_pnl","active","true")
+	UI.setAttribute("penalty_dialog_pnl","visibility","Pink")
+	UI.setAttribute("penalty_dialog_pnl","active","true")
 	--Reload saved data or if fresh load initialize everything
 	if (saved_data ~= "") then
     log("onLoad(): load with saved data")
@@ -95,7 +95,6 @@ function onLoad(save_state)
 			getObjectFromGUID(g).setLock(true)
 		end
 	end
-	-- Wait.time(function() reloadUI(C.board_guid) end,5)
 end
 
 --[[ *****************************
@@ -236,7 +235,6 @@ function startGameBtn(player, btn, id)
 		return
 	end
 	UI.setAttribute("startPanel","active",false)
-	reloadUI(C.board_guid)
 	Wait.frames(function() startGame() end, 10)
 end
 
@@ -401,8 +399,8 @@ End turn with required actions penalty dialog.
 If 'Cancel', return to turn actions.
 if 'OK' then set failed status on remaining actions and end turn.
 ********************************]]
-function penaltyDialog(player, btn, id)
-	log("penaltyDialog() "..player.color..", "..tostring(id))
+function penaltyDialogBtn(player, btn, id)
+	log("penaltyDialogBtn() "..player.color..", "..tostring(id))
 	if player.color ~= GD.game.current_player_color then return end
 	local action = Split(id,'_')[3]
 	if env.test.debug then log("action is "..tostring(action)) end
@@ -419,7 +417,7 @@ function penaltyDialog(player, btn, id)
 		log("***ERROR: unknown action")
 		return
 	end
-	UI.setAttribute("end_turn_pnl","visibility","Pink")
+	UI.setAttribute("penalty_dialog_pnl","visibility","Pink")
 end
 
 --[[ *****************************
@@ -468,22 +466,18 @@ Assumes governor track data has been initialized.
 ********************************]]
 function updateGovernorTrack()
 	if env.test.trace then log("updateGovernorTrack()") end
-	--set the governor images per gov track data table
 	local board = getObjectFromGUID(C.board_guid)
-	local filled = {}
+	--fill base track images
+	for row=1,17 do
+		if row > 7 then
+			board.UI.setAttribute("gov_"..tostring(row),"image","Gray-"..(row-7))
+		else
+			board.UI.setAttribute("gov_"..tostring(row),"image","Gray")
+		end
+	end
+	--set the governor images per gov track data table, overwriting base image set above
 	for i,entry in ipairs(GD.game.governor_track) do
 		board.UI.setAttribute("gov_"..tostring(entry.track_row),"image",entry.city)
-		table.insert(filled,entry.track_row)
-	end
-	--set remaining empty track spaces accordingly
-	for row=1,17 do
-		if not(contains(filled,row)) then
-			if row > GD.game.round + 7 then
-				board.UI.setAttribute("gov_"..tostring(row),"image","Gray-"..(row-7))
-			else
-				board.UI.setAttribute("gov_"..tostring(row),"image","Gray")
-			end
-		end
 	end
 end
 
@@ -774,6 +768,8 @@ function coroFillPlayerBoards()
 			player_board.call("setState",p)
 		end
 	end
+	getObjectFromGUID(C.board_guid).UI.setAttribute("governor_panel", "active", true)
+	reloadUI(C.board_guid)
 	if env.test.trace then log("coroFillPlayerBoards(): EXIT") end
 	return 1
 end
@@ -995,7 +991,6 @@ function houseDrop(pcol, obj)
 		table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
 		local pos = board.positionToWorld(node.center)
 		if GD.game.player_count > 2 then
-			--TODO: set position of house relative to village center, remove HACK: VILLAGE_OFFSET (working pretty good)
 			local pos_1 = node.center - VILLAGE_OFFSET
 			local pos_2 = node.center + VILLAGE_OFFSET
 			pos = board.positionToWorld(pos_1)
@@ -1005,6 +1000,9 @@ function houseDrop(pcol, obj)
 		obj.setRotation(board.getRotation())
 		obj.setPosition(pos)
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+	end
+	local function placeCityHouse(obj, node)
+		--TODO: this
 	end
 	--//////////////////////////////////
 	local pos = obj.getPosition()
@@ -1016,8 +1014,8 @@ function houseDrop(pcol, obj)
 		return
 	end
 	local player = GD.game.players[pcol]
+	local node = GD.network[index]
 	if GD.game.stage == "initial_placement" then
-		local node = GD.network[index]
 		if node.type == "village" then
 			if isVillageFull(node) then
 				snapBack(obj)
@@ -1039,13 +1037,10 @@ function houseDrop(pcol, obj)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 		elseif node.type == "city" then
 			snapBack(obj)
-			-- return
 		else
 			snapBack(obj)
-			-- return
 		end
 	else
-		local node = GD.network[index]
 		if node.type == "village" then
 			if isVillageFull(node) then
 				snapBack(obj)
@@ -1059,7 +1054,12 @@ function houseDrop(pcol, obj)
 				rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
 				action_key = "build"
 			end
-			placeVillageHouse(obj,node)
+			if hasAvailableAction(pcol, action_key) then
+				placeVillageHouse(obj,node)
+			else
+				snapBack(obj)
+				return
+			end
 			local pending_action = {
 				key = action_key, --TODO: rename this to 'id' for consistency???
 				player_color = pcol,
@@ -1080,11 +1080,14 @@ function houseDrop(pcol, obj)
 				getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
 			else
 				--shouldn't really happen but handle anyway
-				log("***WARN: no matching dial_action for dropped house")
+				log("***ERROR: no matching dial_action for dropped house")
 				snapback(obj)
 			end
 		elseif node.type == "city" then
 			log("TODO: handle house drop action in City <--------------")
+
+			placeCityHouse(obj, node)
+
 		else
 			snapBack(obj)
 		end
@@ -1239,7 +1242,6 @@ function playerDone(pcol)
 			if all_set then
 				broadcastToAll("All players have set actions, starting player turns")
 				for _,pcol in ipairs(GD.game.player_order) do
-					-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="actions_locked"})
 					local dial = getObjectFromGUID(C.action_dials[pcol])
 					dial.call("disableBackButton")
 					if not(dial.is_face_down) then dial.call("flipMe") end
@@ -1300,8 +1302,8 @@ function playerDone(pcol)
 				end
 			end
 		else
-			if requiredActions(pcol) then
-				UI.setAttribute("end_turn_pnl","visibility","Pink|"..pcol)
+			if hasRequiredActions(pcol) then
+				UI.setAttribute("penalty_dialog_pnl","visibility","Pink|"..pcol)
 				return
 			end
 		end
@@ -1364,7 +1366,18 @@ TODO: document
 ********************************]]
 function playerUndo(pcol)
 	if env.test.trace then log("playerUndo(): "..pcol) end
-	local actions = GD.game.players[pcol].pending_actions
+	local function resetAction(pcol, key)
+		for _,dial_action in pairs(GD.game.players[pcol].dial_actions) do
+			for i,a in ipairs(dial_action.actions) do
+				if a.id == key and a.status == "Done" then
+					a.status = ""
+					return
+				end
+			end
+		end
+	end
+	local player = GD.game.players[pcol]
+	local actions = player.pending_actions
 	if #actions == 0 then return end
 	local action = actions[#actions]
 	if env.test.debug then log("action to undo:");log(action) end
@@ -1386,19 +1399,13 @@ function playerUndo(pcol)
 		else
 			log("*** ERROR: playerUndo() unable to clear house "..action.guid.."from network node "..tostring(action.undo.node_index))
 		end
-	elseif action.key == "governor_track" then
-		log("TESTING: undoing the gov track action")
+	elseif action.key == "track" then
 		GD.game.governor_track = simpleDeepCopy(action.undo.restore_list)
 		updateGovernorTrack()
 		updateStatusPanel()
 		governorButtons(true)
-
-		-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="track"})
-		--TODO: refactor for new dial design
-		--TODO: update actions in player
-		log("TODO: refactor playerUndo() for new dial design")
-
-		GD.game.players[pcol].governor_clicked = false
+		resetAction(pcol, action.key)
+		player.governor_clicked = false
 		action.status = ""
 	elseif action.key == "build" then
 		log("TESTING: undoing build house action")
@@ -1416,27 +1423,18 @@ function playerUndo(pcol)
 			return
 		end
 		if action.free_action then
-
-			-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="free-build-move"})
-			--TODO: refactor for new dial design
-			--TODO: update actions in player
-			log("TODO: refactor playerUndo() for new dial design")
-
+			player.dial_actions["free-action"].actions[1].status = ""
 		else
-
-			-- getObjectFromGUID(C.action_dials[pcol]).call("setState",{state="undo_action",action_id="house"})
-			--TODO: refactor for new dial design
-			--TODO: update actions in player
-			log("TODO: refactor playerUndo() for new dial design")
-
+			resetAction(pcol, action.key)
 		end
+		updateDialUI(pcol)
 	else
-		log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
+		log("*** ERROR: playerUndo() unknown action key "..tostring(action.key))
 		return
 	end
 	--remove entry and update player board UI
-	table.remove(GD.game.players[pcol].pending_actions, index)
-	if #GD.game.players[pcol].pending_actions == 0 then
+	table.remove(player.pending_actions, index)
+	if #player.pending_actions == 0 then
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=false})
 	end
 end
@@ -1525,12 +1523,31 @@ function failedActions(pcol)
 end
 
 --[[ *****************************
-TODO: need this in a fn?
+Check to see if a player has any unfinished required actions.
+Return true if any, false if not.
 ********************************]]
-function requiredActions(pcol)
-	if env.test.trace then log("requiredActions() "..tostring(pcol)) end
-	for _,action in ipairs(GD.game.players[pcol].dial_actions) do
-		if action.type == "selected" and action.status == "" then return true end
+function hasRequiredActions(pcol)
+	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)) end
+	for id,dial_action in ipairs(GD.game.players[pcol].dial_actions) do
+		if Split(id,'-')[1] == "pointer" then
+			for _,a in ipairs(dial_action.actions) do
+				if a.status == "" then return true end
+			end
+		end
+	end
+	return false
+end
+
+--[[ *****************************
+Check to see if a player has any unfinished action of specified action id.
+Return true if any, false if not.
+********************************]]
+function hasAvailableAction(pcol, action_id)
+	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)) end
+	for id,dial_action in ipairs(GD.game.players[pcol].dial_actions) do
+		for _,a in ipairs(dial_action.actions) do
+			if a.id == action_id and a.status == "" then return true end
+		end
 	end
 	return false
 end

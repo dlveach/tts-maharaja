@@ -74,7 +74,7 @@
 
 </Defaults>
 
-<Panel id="governor_panel" class="governorPanel">
+<Panel id="governor_panel" class="governorPanel" active="false">
   <TableLayout>
     <Row class="govRow"><Cell class="govCell"><Image id="gov_17" class="gImg" image="Gray-10"/></Cell></Row>
     <Row class="govRow"><Cell class="govCell"><Image id="gov_16" class="gImg" image="Gray-9"/></Cell></Row>
@@ -96,12 +96,13 @@
   </TableLayout>
 </Panel>
 
-<Panel class="cityPanel" position="79 -60 -15"><Image id="Bikaner" class="cImg" image="Bikaner"/></Panel>
+<!-- Not needed with board6.jpg, added better Governor images.  Keeping in case decide to do any click or mouseover. -->
+<!--Panel class="cityPanel" position="79 -60 -15"><Image id="Bikaner" class="cImg" image="Bikaner"/></Panel>
 <Panel class="cityPanel" position="-14.5 -43 -15"><Image id="Jaipur" class="cImg" image="Jaipur"/></Panel>
 <Panel class="cityPanel" position="-70 -55 -15"><Image id="Delhi" class="cImg" image="Delhi"/></Panel>
 <Panel class="cityPanel" position="90.5 10.5 -15"><Image id="Jodupur" class="cImg" image="Jodupur"/></Panel>
 <Panel class="cityPanel" position="-79.5 12 -15"><Image id="Agra" class="cImg" image="Agra"/></Panel>
 <Panel class="cityPanel" position="75 76 -15"><Image id="Ahaadabad" class="cImg" image="Ahaadabad"/></Panel>
-<Panel class="cityPanel" position="-68 81 -15"><Image id="Khajuraho" class="cImg" image="Khajuraho"/></Panel>
+<Panel class="cityPanel" position="-68 81 -15"><Image id="Khajuraho" class="cImg" image="Khajuraho"/></Panel-->
 
 </XmlLayout>

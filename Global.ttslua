@@ -576,27 +576,6 @@ function setupStatusPanel()
 end
 
 --[[ *****************************
-Setup: initialize network data
-********************************]]
-function setupNetwork()
-	if env.test.trace then log("setupNetwork()") end
-	GD.network = simpleDeepCopy(NETWORK)
-	for i,node in ipairs(GD.network) do
-		node.center = CENTERS[i]
-		if node.type == "city" then
-			node.houses = {}
-			for _,pcol in pairs(C.table_colors) do
-				node.houses[pcol] = {}
-			end
-			node.palaces = {}
-			node.architects = {}
-		elseif node.type == "village" then
-			node.houses = {}
-		end
-	end
-end
-
---[[ *****************************
 Setup: initialize game for seated players
 ********************************]]
 function setupPlayers()
@@ -1041,11 +1020,7 @@ function houseDrop(pcol, obj)
 			snapBack(obj)
 		end
 	else
-		if node.type == "village" then
-			if isVillageFull(node) then
-				snapBack(obj)
-				return
-			end
+		if node.type == "village" or node.type == "city" then
 			local pos = placedObjSnap(obj.getGUID())
 			local rot = getObjectFromGUID(C.board_guid).getRotation()
 			local action_key = "move"
@@ -1053,12 +1028,6 @@ function houseDrop(pcol, obj)
 				pos = getPlayerBoardLocation(obj)
 				rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
 				action_key = "build"
-			end
-			if hasAvailableAction(pcol, action_key) then
-				placeVillageHouse(obj,node)
-			else
-				snapBack(obj)
-				return
 			end
 			local pending_action = {
 				key = action_key, --TODO: rename this to 'id' for consistency???
@@ -1074,6 +1043,24 @@ function houseDrop(pcol, obj)
 				player.free_action = false
 				pending_action.free_action = true
 			end
+			if hasAvailableAction(pcol, action_key) then
+				if node.type == "village" then
+					if isVillageFull(node) then
+						snapBack(obj)
+						return
+					else
+						placeVillageHouse(obj,node)
+					end
+				else
+					placeCityHouse(obj, node)
+				end
+				if action_key == "build" and not(pending_action.free_action) then
+					log("TODO: pay cost for build (and handle in undo as well) <------------------")
+				end
+			else
+				snapBack(obj)
+				return
+			end
 			if updateDialAction(pcol, pending_action) then
 				updateDialUI(pcol)
 				table.insert(player.pending_actions, pending_action)
@@ -1083,11 +1070,6 @@ function houseDrop(pcol, obj)
 				log("***ERROR: no matching dial_action for dropped house")
 				snapback(obj)
 			end
-		elseif node.type == "city" then
-			log("TODO: handle house drop action in City <--------------")
-
-			placeCityHouse(obj, node)
-
 		else
 			snapBack(obj)
 		end
@@ -1486,28 +1468,35 @@ end
 
 --[[/////////////// Support functions /////////////////////]]
 
+--[[ *****************************
+Searches player's dial actions for an unfinished action matching the supplied pending action.
+if supplied action is "free" then only checks for free dial action.
+Otherwise searches all dial actions.
+if one is found, it is set to "Done" (finished) and returns true.
+If no unfinished matching action is found returns false.
+TODO: get rid of return value, earlier calls to hasAvailableAction() should prevent a failed lookup here.
+********************************]]
 function updateDialAction(pcol, action)
 	if env.test.trace then log("updateDialAction() "..tostring(pcol)..", "..tostring(action.id)) end
 	local player = GD.game.players[pcol]
 	if action.free_action then
 		local dial_action = player.dial_actions["free-action"]
-		if dial_action then
+		if dial_action and dial_action.actions[1].status == "" then
 			dial_action.actions[1].status = "Done"
 			return true
-		else
-			log("***ERROR: could not locate free-action")
-			return false
 		end
 	else
 		for id,dial_action in pairs(player.dial_actions) do
 			for _,entry in ipairs(dial_action.actions) do
-				if entry.id == action.key then
+				if entry.id == action.key and entry.status == "" then
 					entry.status = "Done"
 					return true
 				end
 			end
 		end
 	end
+	--this really shouldn't happen if earlier checks are working, here for debugging
+	log("***ERROR: updateDialAction() could not locate free-action")
 	return false
 end
 
@@ -1528,7 +1517,7 @@ Return true if any, false if not.
 ********************************]]
 function hasRequiredActions(pcol)
 	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)) end
-	for id,dial_action in ipairs(GD.game.players[pcol].dial_actions) do
+	for id,dial_action in pairs(GD.game.players[pcol].dial_actions) do
 		if Split(id,'-')[1] == "pointer" then
 			for _,a in ipairs(dial_action.actions) do
 				if a.status == "" then return true end
@@ -1542,11 +1531,11 @@ end
 Check to see if a player has any unfinished action of specified action id.
 Return true if any, false if not.
 ********************************]]
-function hasAvailableAction(pcol, action_id)
-	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)) end
-	for id,dial_action in ipairs(GD.game.players[pcol].dial_actions) do
+function hasAvailableAction(pcol, key)
+	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)..", key = "..tostring(key)) end
+	for id,dial_action in pairs(GD.game.players[pcol].dial_actions) do
 		for _,a in ipairs(dial_action.actions) do
-			if a.id == action_id and a.status == "" then return true end
+			if a.id == key and a.status == "" then return true end
 		end
 	end
 	return false
@@ -1948,7 +1937,183 @@ function addDialAction(params)
 	updateDialUI(pcol)
 end
 
+--[[/////////////// Network stuff  /////////////////////]]
+
+--[[ *****************************
+Setup: initialize network data
+********************************]]
+function setupNetwork()
+	if env.test.trace then log("setupNetwork()") end
+	GD.network = simpleDeepCopy(NETWORK)
+	for i,node in ipairs(GD.network) do
+		node.center = CENTERS[i]
+		if node.type == "city" then
+			node.houses = {}
+			for _,pcol in pairs(C.table_colors) do
+				node.houses[pcol] = {}
+			end
+			node.palaces = {}
+			node.architects = {}
+		elseif node.type == "village" then
+			node.houses = {}
+		end
+	end
+	setupPathTable()
+end
+
+--[[ *****************************
+Setup: initialize path table
+********************************]]
+function setupPathTable()
+	if env.test.trace then log("setupPathTable()") end
+	GD.path_table = simpleDeepCopy(PATH_TABLE)
+end
+
+--[[ *****************************
+Update path table state and associated costs for given player
+Path state is "open" if all villages on Path have at least one house.
+Path cost is determined by supplied player color and villages on Path.
+	Each village is a table of costs to be paid to colors of opponents
+		for each matching house color in the village..
+	Villages with at least one house of player's color are free.
+Closed Path initialized to an empty cost table.
+If no player color given, all Path costs will be initialized to empty.
+********************************]]
+function updatePathTable(pcol)
+	if env.test.trace then log("updatePathTable() "..tostring(pcol)) end
+	for i,path in ipairs(GD.path_table) do
+		path.open = true
+		for _,v in ipairs(path.villages) do
+			if #GD.network[v].houses == 0 then
+				path.open = false
+				break
+			end
+		end
+		path.cost = {}
+		if path.open and pcol ~= nil then
+			for _,v in ipairs(path.villages) do
+				local free = false
+				local village_cost = {}
+				for _,house in ipairs(GD.network[v].houses) do
+					if house.c == pcol then
+						free = true
+						break
+					else
+						if village_cost[house.c] then
+							village_cost[house.c] = village_cost[house.c] + 1
+						else
+							village_cost[house.c] = 1
+						end
+					end
+				end
+				if not(free) then
+					for color,cost in pairs(village_cost) do
+						if path.cost[color] then
+							path.cost[color] = path.cost[color] + cost
+						else
+							path.cost[color] = cost
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+--[[ *****************************
+Build a table of valid routes between start and destination cities.
+NOTE: 'start_id' and 'dest_id' are the city IDs from the network table.  This
+has to be converted to index into the CITY_CONNECTIONS table.  TODO: May be
+able to consolidate this into one table
+Returns a table of discovered routes.
+********************************]]
+function buildRouteTable(start_id, dest_id)
+	if env.test.trace then log("updatePathTable() start: "..tostring(start_id)..", dest: "..tostring(dest_id)) end
+	local sub_debug = false
+	local start, dest
+	local route_table = {}
+	--get the city connection table ids for supplied start and dest network node ids HACK:
+	for id,conn in ipairs(CITY_CONNECTIONS) do
+		if conn.network_id == start_id then start = id end
+		if conn.network_id == dest_id then dest = id end
+	end
+	if env.test.debug then log("connections start: "..tostring(start)..", dest: "..tostring(dest)) end
+	--[[///////////////////////////////////////////////////////////
+	Recursively crawl the neighbors of a city.
+	Ignore loops back to start.
+	Ignore paths already seen.
+	Return true if dest found, false if not.
+	Paths added to route if dest found.
+	///////////////////////////////////////////////////////////////]]
+	local function addPaths(id, route)
+		if sub_debug then log("addPaths() process city id: "..tostring(id)) end
+		if #route.seen > 8 or #route.paths > 16 then log("*****ERROR: addPath() safety exceeded"); return end
+		if id == route.dest then
+			table.insert(route.seen,id)
+			table.insert(route_table, simpleDeepCopy(route)) --save a copy of this route
+			return
+		end
+		table.insert(route.seen, id)
+		for _,neighbor in ipairs(CITY_CONNECTIONS[id].neighbors) do
+			if not(contains(route.seen, neighbor.id)) and GD.path_table[neighbor.path].open then
+				local route_to_here = simpleDeepCopy(route)
+				table.insert(route_to_here.paths, neighbor.path)
+				addPaths(neighbor.id, route_to_here)
+			end
+		end
+	end
+	--[[////////////////////
+	Start the crawl
+	///////////////////////]]
+	for _,neighbor in ipairs(CITY_CONNECTIONS[start].neighbors) do
+		if GD.path_table[neighbor.path].open then
+			local route = {dest=dest, paths={neighbor.path}, seen={start}}
+			if neighbor.id == route.dest then
+				table.insert(route.seen, neighbor.id)
+				table.insert(route_table, route)
+			else
+				addPaths(neighbor.id, route)
+			end
+		end
+	end
+	return route_table
+end
+
+
+
 --[[/////////////// DEVELOPMENTAL STUFF ///////////////////////]]
+
+function t_testRecursiveCoro()
+	startLuaCoroutine(Global, "testRecursiveCoro")
+end
+
+g_limit = 5
+g_list = {}
+function testRecursiveCoro()
+	local limit = g_limit
+	-- local list = {}
+	local step = 1
+	function doit()
+		if step > limit then
+			log("normal stop")
+			return
+		end
+		if step > 100 then
+			log("Hit safety limit")
+			return
+		end
+		table.insert(g_list,step)
+		log("Step "..tostring(step))
+		step = step + 1
+		for i=1,10 do
+			coroutine.yield(0)
+		end
+		doit(step)
+	end
+	doit()
+	log(g_list)
+	return 1
+end
 
 function testCityHouses(pcol, city_name)
 	log("put selected houses in "..city_name)

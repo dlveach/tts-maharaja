@@ -203,14 +203,12 @@ C.player_data = {
   palaces = {},
   placed_palaces = {},
   placed_houses = {},
-  actions = {},
   gold = 0,
   extra_actions = 0,
   character_id = -1,
-  has_actions = false,
-  free_actions = {},
+  has_actions = false,    --TODO: FIX has_actions  Look at this.  Maybe use turn_actions instead?
   pending_actions = {},
-  dial_actions = {},
+  turn_actions = {},
   status_panel = true,
   pawn_location = {},
 }

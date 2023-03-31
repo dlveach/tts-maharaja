@@ -263,8 +263,8 @@ C.dial_actions = {
   {
     id="build2",
     actions = {
-      {id="build-city",label="Build a House (City)",},
-      {id="build",label="Build a House (City/Village)",},
+      {id="build", city_required=true, label="Build a House (City)",},
+      {id="build", label="Build a House (City/Village)",},
     },
   },
   {

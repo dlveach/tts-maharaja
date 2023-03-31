@@ -1031,19 +1031,27 @@ function houseDrop(pcol, obj)
 			end
 			local pending_action = {
 				key = action_key, --TODO: rename this to 'id' for consistency???
+				location = node.type,
 				player_color = pcol,
 				guid = obj.getGUID(),
 				undo = {
 					node_index = index,
 					guid = obj.getGUID(),
-					snapback = {pos=pos,rot=rot}
+					snapback = {pos=pos,rot=rot},
 				},
 			}
 			if player.free_action then
 				player.free_action = false
 				pending_action.free_action = true
+			else
+				if action_key == "build" and player.gold < 1 then
+					snapBack(obj)
+					if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
+					return
+				end
 			end
-			if hasAvailableAction(pcol, action_key) then
+			-- if hasAvailableAction(pcol, action_key) then
+			if hasAvailableAction(pcol, pending_action) then
 				if node.type == "village" then
 					if isVillageFull(node) then
 						snapBack(obj)
@@ -1055,9 +1063,11 @@ function houseDrop(pcol, obj)
 					placeCityHouse(obj, node)
 				end
 				if action_key == "build" and not(pending_action.free_action) then
-					log("TODO: pay cost for build (and handle in undo as well) <------------------")
+					player.gold = player.gold - 1
+					getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 				end
 			else
+				if GD.env.verbose then broadcastToColor("No more "..action_key.." actions", pcol) end
 				snapBack(obj)
 				return
 			end
@@ -1309,6 +1319,15 @@ function endTurn(pcol)
 	player.pending_actions = {}
 	player.actions_set = false
 	getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
+	unplayedPalacesLock(pcol, true)
+	buildPoolLock(pcol, true)
+	placedHousesLock(pcol, true)
+
+	--TODO: character cards lock ???
+
+	--TODO: remove gov track buttons ???
+	--governorButtons(false)
+
 	--update round and check for end of round or end of game
 	table.remove(GD.game.remaining_round_players,index) --TODO: redundant to has_actions ???
 	if #GD.game.remaining_round_players == 0 then  --TODO: just check for any player.has_actions ???
@@ -1350,6 +1369,7 @@ function playerUndo(pcol)
 	if env.test.trace then log("playerUndo(): "..pcol) end
 	local function resetAction(pcol, key)
 		for _,dial_action in pairs(GD.game.players[pcol].dial_actions) do
+			if dial_action.id == build2 then log("TODO: handle reset action for build2 <----------------- ") end
 			for i,a in ipairs(dial_action.actions) do
 				if a.id == key and a.status == "Done" then
 					a.status = ""
@@ -1396,18 +1416,23 @@ function playerUndo(pcol)
 		obj.setRotation(action.undo.snapback.rot)
 		obj.setLock(false)
 		local node = GD.network[action.undo.node_index]
+		if node.type == "city" then
+			log("TODO: handle undo for city build <--------------------- ")
+		end
 		if node.houses[1] and node.houses[1].g == action.guid then
 			node.houses[1] = nil
 		elseif node.houses[2] and node.houses[2].g == action.guid then
 			node.houses[2] = nil
 		else
-			log("*** ERROR: playerUndo() unable to clear house "..action.guid.."from network node "..tostring(action.undo.node_index))
+			log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))
 			return
 		end
 		if action.free_action then
 			player.dial_actions["free-action"].actions[1].status = ""
 		else
 			resetAction(pcol, action.key)
+			player.gold = player.gold + 1
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 		end
 		updateDialUI(pcol)
 	else
@@ -1475,6 +1500,7 @@ Otherwise searches all dial actions.
 if one is found, it is set to "Done" (finished) and returns true.
 If no unfinished matching action is found returns false.
 TODO: get rid of return value, earlier calls to hasAvailableAction() should prevent a failed lookup here.
+HACK: special case for city only build
 ********************************]]
 function updateDialAction(pcol, action)
 	if env.test.trace then log("updateDialAction() "..tostring(pcol)..", "..tostring(action.id)) end
@@ -1489,8 +1515,15 @@ function updateDialAction(pcol, action)
 		for id,dial_action in pairs(player.dial_actions) do
 			for _,entry in ipairs(dial_action.actions) do
 				if entry.id == action.key and entry.status == "" then
-					entry.status = "Done"
-					return true
+					if entry.city_required then
+						if action.location == "city" then  --HACK: ugly special case
+							entry.status = "Done"
+							return true
+						end
+					else
+						entry.status = "Done"
+						return true
+					end
 				end
 			end
 		end
@@ -1531,11 +1564,19 @@ end
 Check to see if a player has any unfinished action of specified action id.
 Return true if any, false if not.
 ********************************]]
-function hasAvailableAction(pcol, key)
-	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)..", key = "..tostring(key)) end
+function hasAvailableAction(pcol, pending_action)
+	if env.test.trace then log("hasAvailableAction() "..tostring(pcol)..", key = "..tostring(pending_action.key)) end
 	for id,dial_action in pairs(GD.game.players[pcol].dial_actions) do
 		for _,a in ipairs(dial_action.actions) do
-			if a.id == key and a.status == "" then return true end
+			if a.id == pending_action.key and a.status == "" then
+				if a.city_required then
+					if pending_action.location == "city" then  --HACK: ugly special case
+						return true
+					end
+				else
+					return true
+				end
+			end
 		end
 	end
 	return false
@@ -1680,7 +1721,9 @@ function placedObjSnap(guid)
 	return nil
 end
 
---[[ *********** TODO ??? ******************
+--[[ *****************************
+Return true if a Village is full per number of plaayers
+and number of houses placed in the village.
 TODO: need this in a fn? Used only once?
 ********************************]]
 function isVillageFull(node)

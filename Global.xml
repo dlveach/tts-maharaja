@@ -68,6 +68,44 @@
 
 </Defaults>
 
+<Panel id="replace_character_pnl"   active="false"
+  height="220" width="420"
+  padding="10 10 10 10"
+  color="#003699"
+  image="Sprites/Layout/Base">
+  <Panel
+    color="#00091a"
+    image="Sprites/Layout/Base"
+    childAlignment="MiddleCenter">
+    <TableLayout columnWidths="0 0">
+      <Row preferredHeight="100">
+        <Cell padding="0 0 0 0" columnSpan="2">
+          <VerticalLayout>
+            <Text id="replace_character_txt" fontSize="24" color="Green" text="Green"/>
+            <Text class="large" color="Gray">Choose a replacement character</Text>
+          </VerticalLayout>
+        </Cell>
+      </Row>
+      <Row preferredHeight="80">
+        <Cell padding="25 25 20 5">
+          <Panel id="replace_done_pnl" visibility="Pink">
+            <Button id="replace_char_done" onClick="replaceCharDialogBtn">
+              <Text fontSize="20" color="rgb(1,1,0)" textShadow="rgba(0,0,0,1)" text="Done"/>
+            </Button>
+          </Panel>
+        </Cell>
+        <Cell padding="25 25 20 5">
+          <Panel id="replace_undo_pnl" visibility="Pink">
+            <Button id="replace_char_undo" onClick="replaceCharDialogBtn">
+              <Text fontSize="20" color="rgb(1,1,0)" textShadow="rgba(0,0,0,1)" text="Undo"/>
+            </Button>
+          </Panel>
+        </Cell>
+      </Row>
+    </TableLayout>
+  </Panel>
+</Panel>
+
 <Panel id="penalty_dialog_pnl"  active="false"
   height="220" width="420"
   padding="10 10 10 10"

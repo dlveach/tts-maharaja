@@ -181,8 +181,10 @@ function reset()
     if i==2 then assert(decal.name == "pointer-2", gid..": ERROR: setPointerRotation(): Invalid pointer 2 decal") end
     if decal.name == "pointer-extra" then extra = i end
   end
-  decals[1].rotation.z = rot.z + 180
-  decals[2].rotation.z = rot.z + 180
+  -- decals[1].rotation.z = rot.z + 180
+  -- decals[2].rotation.z = rot.z + 180
+  decals[1].rotation.z = rot.z
+  decals[2].rotation.z = rot.z
   if extra > 0 then table.remove(decals,extra) end
   self.setDecals(decals)
 end

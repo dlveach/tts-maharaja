@@ -29,6 +29,9 @@ TTS mod for Maharaja
 
 	-- lots of implementation for feature complete
 
+	--dedupe and refactor code for updating/setting player character bonuses.  Got very messy after`
+		adding character exchange action.  Probably lots of bugs.
+
 	--BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too.
 
 ==========================================================================================]]
@@ -44,8 +47,8 @@ env.test.auto_switch = true
 -- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
-env.test.players = {"Green","Red",}
--- env.test.players = {"Green","Red","Blue"}
+-- env.test.players = {"Green","Red",}
+env.test.players = {"Green","Red","Blue"}
 -- env.test.players = {"Red","Green","Purple",}
 
 env.game = {}
@@ -72,6 +75,9 @@ function onLoad(save_state)
 	end
 	UI.setAttribute("penalty_dialog_pnl","visibility","Pink")
 	UI.setAttribute("penalty_dialog_pnl","active","true")
+	UI.setAttribute("replace_done_pnl","visibility","Pink")
+	UI.setAttribute("replace_undo_pnl","visibility","Pink")
+	UI.setAttribute("replace_character_pnl","active",false)
 	--Reload saved data or if fresh load initialize everything
 	if (saved_data ~= "") then
     log("onLoad(): load with saved data")
@@ -257,7 +263,12 @@ function governorClick(player, btn, id)
 			restore_list = simpleDeepCopy(track),
 		}
 	}
-	if updateDialAction(player.color, pending_action) then
+	setActionIndex(player.color, pending_action)
+	if pending_action.action_index < 1 then
+		--shouldn't happen, for debugging
+		log("***ERROR: governorClick() could not locate a turn action")
+	else
+		updateTurnAction(player.color, pending_action)
 		table.insert(GD.game.players[player.color].pending_actions, pending_action)
 		--find the data table index for the clicked row
 		local index = -1
@@ -406,12 +417,11 @@ function penaltyDialogBtn(player, btn, id)
 	if env.test.debug then log("action is "..tostring(command)) end
 	if command == "ok" then
 		for _,action in ipairs(GD.game.players[player.color].turn_actions) do
-			if not(action.free) and action.status ~= "Done" then
-				action.status = "Failed"
-			end
+			if not(action.free) and action.status ~= "Done" then action.status = "Failed" end
 		end
 		updateDialUI(player.color)
-		endTurn(player.color)
+		playerDone(player.color)
+		-- endTurn(player.color)
 	elseif command == "cancel" then
 		--noop
 	else
@@ -435,6 +445,80 @@ function dialModifyClick(player, btn, id)
 	if dial.is_face_down then dial.call("flipMe") end
 	getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true,undo=false})
 end
+
+--[[ *****************************
+Handle player click on replace character dialog
+If 'Done', finalize the selection in playerDone().
+if 'Undo' undo the selection in playerUndo().
+********************************]]
+function replaceCharDialogBtn(player, btn, id)
+	if env.test.trace then log("replaceCharDialogBtn(): player "..player.color..", id="..tostring(id)) end
+	local command = Split(id,'_')[3]
+	log("command = "..tostring(command))
+	if command == "done" then
+		local action,index
+		for i,a in ipairs(GD.game.players[player.color].pending_actions) do
+			if a.key == "exchange" and a.type == "replace" then
+				action = a
+				index = i
+				break
+			end
+		end
+		if not(action) then
+			log("***ERROR: replaceCharDialogBtn() no pending action")
+			return
+		end
+		GD.game.players[player.color].character_id = action.character_id
+		setCharacterBonus(player.color)
+		--special case, adjust free turn action for holding/not holding the Builder
+		local free = false
+		local index
+		for i,a in ipairs(GD.game.players[player.color].turn_actions) do
+			if a.free then
+				free = true
+				index = i
+				break
+			end
+		end
+		if action.character_id == 5 then
+			if not(free) then
+				local free_action = simpleDeepCopy(C.dial_actions[9].actions[1])
+				free_action.status = ""
+				free_action.pointer_id = ""
+				free_action.free = true
+				free_action.index = #GD.game.players[player.color].turn_actions + 1
+				table.insert(GD.game.players[player.color].turn_actions, free_action)
+			end
+		else
+			if free then
+				table.remove(GD.game.players[player.color].turn_actions, index)
+				for i,a in ipairs(GD.game.players[player.color].turn_actions) do
+					a.index = i --fixup index
+				end
+			end
+		end
+		GD.game.players[player.color].replace_character = false
+		table.remove(GD.game.players[player.color].pending_actions,index)
+		updateDialUI(player.color)
+		UI.setAttribute("replace_character_pnl","active",false)
+		UI.setAttribute("replace_done_pnl","visibility","Pink")
+		UI.setAttribute("replace_undo_pnl","visibility","Pink")
+		--unlock mutex, check for round end or advance to next player in round
+		GD.game.wait_for_character_replace = false
+		updateTurnOrder()
+		if #GD.game.remaining_round_players == 0 then
+			finishCurrentRound()
+		else
+			startPlayerTurn(setNextPlayer())
+		end
+	elseif command == "undo" then
+		playerUndo(player.color)
+		UI.setAttribute("replace_undo_pnl","visibility","Pink")
+	else
+		log("*** ERROR replaceCharDialogBtn() unknown command")
+	end
+end
+
 
 --[[/////////////// Game Setup /////////////////////]]
 
@@ -820,6 +904,9 @@ function setStartingCharacter(action)
 	GD.game.characters_selected = GD.game.characters_selected + 1
 	if GD.game.characters_selected == GD.game.player_count then
 		--All players selected a character, now setup game for initial house placement
+		for id,char in ipairs(C.characters) do
+			getObjectFromGUID(char.g).setLock(true)
+		end
 		updateTurnOrder()
 		setNextPlayer(FIRST)
 		GD.game.stage = "initial_placement"
@@ -889,37 +976,13 @@ function beginNextRound()
 	if GD.env.verbose then broadcastToAll("Beginning round "..tostring(GD.game.current_round).." of max 10") end
 	moveMaharaja()
 	GD.game.remaining_round_players = {} ---HACK: is there a better way to do this?
+	updateTurnOrder()
 	GD.game.stage = "select_actions"
 	for pcol,player in pairs(GD.game.players) do
 		player.has_actions = true
 		player.turn_actions = {}
 		player.pointers = {}
-
-		--TODO: TESTING set player character bonuses here
-		player.character_bonus = nil
-		if player.character_id == 7 then
-			player.character_bonus = "+1_extra_action"
-		elseif player.character_id == 6 then
-			player.character_bonus = "build_palace_discount"
-		elseif player.character_id == 5 then
-			if GD.env.verbose then print(pcol.." gets a free build/move action this round") end
-			local action = simpleDeepCopy(C.dial_actions[9].actions[1])
-			action.status = ""
-			action.pointer_id = ""
-			action.free = true
-			table.insert(player.turn_actions,action)
-			player.character_bonus = "free_build_move"
-		elseif player.character_id == 4 then
-			player.character_bonus = "free_travel"
-		elseif player.character_id == 3 then
-			player.character_bonus = "outer_palace_scoring"
-		elseif player.character_id == 2 then
-			player.character_bonus = "+1_gold"
-		else
-			log("***ERROR: beginNextRound Unknown character id for "..tostring(pcol))
-		end
-
-		updateDialUI(pcol)
+		setCharacterBonus(pcol)
 		local dial = getObjectFromGUID(C.action_dials[pcol])
 		dial.call("reset")
 		dial.call("enableDialButtons")
@@ -929,29 +992,44 @@ function beginNextRound()
 		txt = txt .. "Player turns will begin once all have confirmed.\n"
 		txt = txt .. "Until then selections can be modified."
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,done=false,undo=false,help_text=txt})
-		table.insert(GD.game.remaining_round_players, pcol)   --HACK: is there a better way to do this?
+		table.insert(GD.game.remaining_round_players, pcol)
 	end
 end
 
 --[[ *****************************
 Process a dropped character card.
 Result depends on game stage.
-TODO: handle during player turn
 ********************************]]
 function characterDrop(pcol, obj)
 	if env.test.trace then log("characterDrop()") end
 	local char_id = getCharacterId(obj.getGUID())
 	local board = getObjectFromGUID(C.board_guid)
-	if GD.game.stage == "select_starting_characters" then
-		if pcol ~= GD.game.current_player_color then --ignore non active player
-			obj.setPosition(C.characters[char_id].bank_pos)
-			obj.setRotation(board.getRotation())
-			return
+	local player = GD.game.players[pcol]
+	--///////// Local Functions //////////
+	local function snapBack(obj)
+		local pos,rot
+		for color,pdata in pairs(GD.game.players) do
+			if char_id == pdata.character_id then
+				local player_board = getObjectFromGUID(C.player_boards[color])
+				pos = player_board.positionToWorld(C.player_board_character_location)
+				rot = player_board.getRotation()
+			end
 		end
-		if #GD.game.players[pcol].pending_actions > 0 then --only select one
-			broadcastToColor("Character already selected", pcol)
-			obj.setPosition(C.characters[char_id].bank_pos)
-			obj.setRotation(board.getRotation())
+		if not(pos) then pos = C.characters[char_id].bank_pos end
+		if not(rot) then rot = board.getRotation() end
+		obj.setPositionSmooth(pos, false, true)
+		obj.setRotation(rot)
+		return
+	end
+	--/////////////////////////////////
+	if pcol ~= GD.game.current_player_color and not(player.replace_character) then
+		snapBack(obj)
+		return
+	end
+	if GD.game.stage == "select_starting_characters" then
+		if #GD.game.players[pcol].pending_actions > 0 then
+			if GD.env.verbose then broadcastToColor("Character already selected", pcol) end
+			snapBack(obj)
 			return
 		end
 		local player_board = getObjectFromGUID(C.player_boards[pcol])
@@ -960,7 +1038,7 @@ function characterDrop(pcol, obj)
 		obj.setPositionSmooth(pos, false, true)
 		obj.setRotation(rot)
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-		local action = {
+		local pending_action = {
 			key = "select_starting_character",
 			player_color = pcol,
 			character_id = char_id,
@@ -969,13 +1047,134 @@ function characterDrop(pcol, obj)
 				snapback = {pos=C.characters[char_id].bank_pos, rot=board.getRotation()},
 			},
 		}
-		table.insert(GD.game.players[pcol].pending_actions, action)
+		table.insert(player.pending_actions, pending_action)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
-	elseif GD.game.stage == "player_turn" then
-
-		--TODO: implement this
-		log("TODO: implement character drop on player turn <-------------------")
-
+	elseif GD.game.stage == "player_turns" then
+		for _,a in ipairs(player.pending_actions) do
+			if a.key == "exchange" then
+				log("TESTING: characterDrop() prevent player from selecting multiple character tiles")
+				if GD.env.verbose then broadcastToColor("Character already selected", pcol) end
+				snapBack(obj)
+				return
+			end
+		end
+		if char_id == player.character_id then
+			log("TESTING: snap back own character and ignore")
+			snapBack(obj)
+			return
+		end
+		if player.replace_character then
+			--this player selecting a new character after being stolen
+			local player_board = getObjectFromGUID(C.player_boards[pcol])
+			local pos = player_board.positionToWorld(C.player_board_character_location)
+			local rot = player_board.getRotation()
+			obj.setPositionSmooth(pos, false, true)
+			obj.setRotation(rot)
+			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+			local pending_action = {
+				key = "exchange",
+				type = "replace",
+				player_color = pcol,
+				character_id = char_id,
+				undo = {
+					guid = obj.getGUID(),
+					snapback = {pos=C.characters[char_id].bank_pos, rot=board.getRotation()},
+				},
+			}
+			setCharacterBonus(pcol)
+			local txt = "Execute actions in any order.\n"			--TODO: make this a constant?
+			txt = txt.."May move Architect at any time.\n"
+			txt = txt.."All required actions must be executed.\n"
+			txt = txt..C.character_bonus_descriptions[player.character_id]
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=false,undo=false,help_text=txt})
+			table.insert(player.pending_actions, pending_action)
+			player.replace_character = false
+			UI.setAttribute("replace_done_pnl","visibility",pcol)
+			UI.setAttribute("replace_undo_pnl","visibility",pcol)
+		else
+			local curr_guid = C.characters[player.character_id].g
+			if curr_guid ~= obj.getGUID() then
+				local opponent = ""
+				local opp_char_id = -1
+				for color,opp in pairs(GD.game.players) do
+					if color != pcol then
+						if opp.character_id == char_id then
+							opponent = color
+							opp_char_id = opp.character_id
+							break
+						end
+					end
+				end
+				log("TESTING: opponent = "..tostring(opponent))
+				local curr_char = getObjectFromGUID(curr_guid)
+				local player_board = getObjectFromGUID(C.player_boards[pcol])
+				local pos = player_board.positionToWorld(C.player_board_character_location)
+				local rot = player_board.getRotation()
+				local pending_action = {
+					key = "exchange",
+					type = "exchange",
+					player_color = pcol,
+					character_id = char_id,
+					old_char_id = player.character_id,
+					opponent = opponent,
+					opp_char_id = opp_char_id,
+					undo = {
+						new_guid = obj.getGUID(),
+						snapback = {pos=C.characters[char_id].bank_pos, rot=board.getRotation()},
+						old_guid = curr_guid,
+					},
+				}
+				if opponent == "" then
+					pending_action.bank = true
+				else
+					pending_action.bank = false
+					pending_action.opp_char_id = opp_char_id
+					local opp_board =  getObjectFromGUID(C.player_boards[opponent])
+					pending_action.undo.snapback.pos = opp_board.positionToWorld(C.player_board_character_location)
+					pending_action.undo.snapback.rot = opp_board.getRotation()
+				end
+				setActionIndex(pcol, pending_action)
+				if pending_action.action_index < 1 then
+					--TODO: shouldn't happen if checking for pending action above???
+					if GD.env.verbose then broadcastToColor("No available Exchange Character action",pcol) end
+					log("ERROR: characterDrop() unexpected: unable to locate unused exchange character action for player "..tostring(pcol))
+					snapBack(obj)
+				else
+					curr_char.setPosition(C.characters[player.character_id].bank_pos)
+					curr_char.setRotation(board.getRotation())
+					obj.setPositionSmooth(pos, false, true)
+					obj.setRotation(rot)
+					Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+					player.character_id = char_id
+					setCharacterBonus(pcol)
+					local txt = "Execute actions in any order.\n"			--TODO: make this a constant?
+					txt = txt.."May move Architect at any time.\n"
+					txt = txt.."All required actions must be executed.\n"
+					txt = txt..C.character_bonus_descriptions[player.character_id]
+					getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=active,done=active,undo=true,help_text=txt})
+					if player.character_id == 7 then
+						player.extra_actions = player.extra_actions + 1
+						getObjectFromGUID(C.player_boards[pcol]).call("setState",{extra_actions=player.extra_actions})
+						if GD.env.verbose then printToAll(pcol.." +1 extra action token for the Yogi") end
+						pending_action.undo.extra_actions = -1
+					elseif player.character_id == 2 then
+						player.gold = player.gold + 1
+						getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+						if GD.env.verbose then printToAll(pcol.." +1 gold for the Trader") end
+						pending_action.undo.gold = -1
+					elseif player.character_id == 5 then
+						if GD.env.verbose then printToAll(pcol.." free build/move") end
+						pending_action.undo.free_action = true
+					end
+					table.insert(player.pending_actions, pending_action)
+					getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
+					updateTurnAction(pcol, pending_action)
+					updateDialUI(pcol)
+				end
+			end
+		end
+	else
+		log("***ERROR: characterDrop() invalid game stage")
 	end
 end
 
@@ -986,8 +1185,10 @@ Result depends on game stage.
 function houseDrop(pcol, obj)
 	if env.test.trace then log("houseDrop()") end
 	local board = getObjectFromGUID(C.board_guid)
+	local player = GD.game.players[pcol]
 	local color = obj.getName()
-	--/////// internal functions ///////
+	--/////// local functions ///////
+	--[[TODO: document]]
 	local function snapBack(obj)
 		local pos = placedObjSnap(obj.getGUID())
 		if pos then
@@ -1012,9 +1213,45 @@ function houseDrop(pcol, obj)
 		obj.setPosition(pos)
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
+	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
 		--TODO: this
 		log("TODO: local function placeCityHouse() <------------------------- ")
+	end
+	--[[Override this function locally for house drop special case handling
+	find first available turn action for the pending_action.key
+	Search required actions (dial selected) first, then try free action. ]]
+	local function setActionIndex(pcol, pending_action)
+		local action_index = -1
+		local free_action = false
+		local player = GD.game.players[pcol]
+		--search first for a pointer action
+		for i,a in ipairs(player.turn_actions) do
+			if a.id == pending_action.key and a.status == "" and a.pointer_id ~= "" then
+				if a.city_required then  --HACK: ugly special case for build in a city only action
+					if pending_action.location == "city" then
+						action_index = i
+						break
+					end
+				else
+					action_index = i
+					break
+				end
+			end
+		end
+		if action_index == -1 then
+			--no pointer action so search for a free action (no pointer_id)
+			for i,a in ipairs(player.turn_actions) do
+				if a.id == pending_action.key and a.status == "" and a.pointer_id == "" then
+					action_index = i
+					free_action = true
+					break
+				end
+			end
+		end
+		--set the values in the pending action (pass by reference)
+		pending_action.action_index = action_index
+		pending_action.free_action = free_action
 	end
 	--//////////////////////////////////
 	local pos = obj.getPosition()
@@ -1025,7 +1262,6 @@ function houseDrop(pcol, obj)
 		snapBack(obj)
 		return
 	end
-	local player = GD.game.players[pcol]
 	local node = GD.network[node_index]
 	if GD.game.stage == "initial_placement" then
 		if node.type == "village" then
@@ -1034,18 +1270,22 @@ function houseDrop(pcol, obj)
 				return
 			end
 			placeVillageHouse(obj,node)
-			local action = {
+			local pending_action = {
 				key = "initial_placement",
 				player_color = pcol,
 				guid = obj.getGUID(),
 				undo = {
 					node_index = node_index,
 					guid = obj.getGUID(),
-					snapback = {pos=getPlayerBoardLocation(obj),rot=getObjectFromGUID(C.player_boards[pcol]).getRotation()}
+					snapback = {
+						pos=getPlayerBoardLocation(obj),
+						rot=getObjectFromGUID(C.player_boards[pcol]).getRotation(),
+					}
 				},
 			}
 			--show done and undo buttons
-			table.insert(player.pending_actions, action)
+			log(pending_action)
+			table.insert(player.pending_actions, pending_action)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 		elseif node.type == "city" then
 			snapBack(obj)
@@ -1054,69 +1294,38 @@ function houseDrop(pcol, obj)
 		end
 	else
 		if node.type == "village" or node.type == "city" then
-			local pos = placedObjSnap(obj.getGUID())
-			local rot = getObjectFromGUID(C.board_guid).getRotation()
-			local action_key = "move"
-			if not(pos) then --this house coming from player's pool
-				pos = getPlayerBoardLocation(obj)
-				rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
-				action_key = "build"
-			end
-
-			--find first available turn action for this action_key TODO: move to a function?
-			local action_index = -1
-			local free_action = false
-			--search first for a pointer action
-			for i,a in ipairs(player.turn_actions) do
-				if a.id == action_key and a.status == "" and a.pointer_id ~= "" then
-					if a.city_required then
-						if node.type == "city" then  --HACK: ugly special case
-							action_index = i
-							break
-						end
-					else
-						action_index = i
-						break
-					end
-				end
-			end
-			if action_index == -1 then
-				--no pointer action so search for a free action
-				for i,a in ipairs(player.turn_actions) do
-					if a.id == action_key and a.status == "" and a.pointer_id == "" then
-						action_index = i
-						free_action = true
-						break
-					end
-				end
-			end
-			if action_index == -1 then
-				-- no available action
-				snapBack(obj)
-				if GD.env.verbose then broadcastToColor("No more "..action_key.." actions", pcol) end
-				return
-			end
-
 			local pending_action = {
-				key = action_key,
-				action_index = action_index,
-				free_action = free_action,
+				key = "move",
+				action_index = -1,
+				free_action = false,
 				location = node.type,
 				player_color = pcol,
 				guid = obj.getGUID(),
 				undo = {
 					node_index = node_index,
 					guid = obj.getGUID(),
-					snapback = {pos=pos,rot=rot},
+					snapback = {
+						pos=placedObjSnap(obj.getGUID()),
+						rot=getObjectFromGUID(C.board_guid).getRotation()
+					},
 				},
 			}
-
-			if not(free_action) and action_key == "build" and player.gold < 1 then
+			if not(pending_action.undo.snapback.pos) then --this house coming from player's pool
+				pending_action.undo.snapback.pos = getPlayerBoardLocation(obj)
+				pending_action.undo.snapback.rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
+				pending_action.key = "build"
+			end
+			setActionIndex(pcol, pending_action)
+			if pending_action.action_index == -1 then
+				snapBack(obj)
+				if GD.env.verbose then broadcastToColor("No more "..pending_action.key.." actions", pcol) end
+				return
+			end
+			if not(pending_action.free_action) and pending_action.key == "build" and player.gold < 1 then
 				snapBack(obj)
 				if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
 				return
 			end
-
 			if node.type == "village" then
 				if isVillageFull(node) then
 					snapBack(obj)
@@ -1127,21 +1336,14 @@ function houseDrop(pcol, obj)
 			else
 				placeCityHouse(obj, node)
 			end
-
-			if action_key == "build" and not(free_action) then
+			if pending_action.key == "build" and not(pending_action.free_action) then
 				player.gold = player.gold - 1
 				getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 			end
-
-			if updateDialAction(pcol, pending_action) then				--TODO: FIX updateDialAction()  get rid of conditional return
-				updateDialUI(pcol)
-				table.insert(player.pending_actions, pending_action)
-				getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
-			else
-				--shouldn't really happen but handle anyway
-				log("***ERROR: no matching dial_action for dropped house")
-				snapback(obj)
-			end
+			updateTurnAction(pcol, pending_action)
+			updateDialUI(pcol)
+			table.insert(player.pending_actions, pending_action)
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
 		else
 			snapBack(obj)
 		end
@@ -1159,7 +1361,129 @@ end
 Process a dropped architect.
 ********************************]]
 function architectDrop(pcol, obj)
-	log("TODO: architectDrop ****")
+	if env.test.trace then log("architectDrop(): "..pcol..", "..tostring(obj)) end
+	local board = getObjectFromGUID(C.board_guid)
+	local player = GD.game.players[pcol]
+	local color = obj.getName()
+	local function snapback(obj)
+		local pos = player.pawn_location.snap_pos
+		assert(pos, "***ERROR: architectDrop() invalid snap back position")
+		obj.setPosition(pos)
+	end
+	if color ~= pcol then snapback(obj) end
+	local pos = obj.getPosition()
+	local node_index = closestNode(pos)
+	log("nearest is id "..tostring(node_index)..", type "..GD.network[node_index].type..", name "..GD.network[node_index].name)
+	if node_index < 1 then
+		snapBack(obj)
+		return
+	end
+	local node = GD.network[node_index]
+	if node.type ~= "city" then
+		snapback(obj)
+		return
+	end
+	if node_index == player.pawn_location.current_node then
+		snapback(obj)
+		return
+	end
+	--position pawn on city location
+	obj.setPosition(board.positionToWorld(node.center - Vector(C.city_pawn_offsets[pcol])))
+
+	--/////////// TESTING
+	updatePathTable(pcol)
+	local start_id = player.pawn_location.current_node
+	local dest_id = node_index
+	local tmp = buildRouteTable(start_id, dest_id)
+	if #tmp == 0 then --no valid route
+		log("No valid route from node "..tostring(start_id).." to node "..dest_id)
+		snapback(obj)
+		return
+	end
+	log("////////// TESTING: architectDrop ")
+	log(tmp)
+	local routes = {}
+	for i,e in ipairs(tmp) do  --calculate routes
+		local route = {}
+		route.total_cost = 0
+		route.length = 0
+		local cities = ""
+		for _,c in ipairs(e.seen) do
+			cities = cities .." "..tostring(c)
+		end
+		route.cities = cities
+		local costs = {}
+		for _,p in ipairs(e.paths) do
+			route.length = route.length + 1
+			for color,cost in pairs(GD.path_table[p].cost) do
+				route.total_cost = route.total_cost + cost
+				if costs[color] ~= nil then
+					costs[color] = costs[color] + cost
+				else
+					costs[color] = cost
+				end
+			end
+		end
+		route.costs = simpleDeepCopy(costs)
+		table.insert(routes,simpleDeepCopy(route))
+	end
+	log("routes discovered:")
+	log(routes)
+	-- prune too expensive (total cost > player gold), if all are too expensive then snapback & warn
+	for i,route in ipairs(routes) do  --prune routes
+		if route.total_cost > player.gold then routes[i]=nil end
+	end
+	if #routes == 0 then
+		log("All routes from node "..tostring(start_id).." to node "..dest_id.." cost more than player gold")
+		snapback(obj)
+		return
+	end
+	-- keep just one (the shortest) free route
+	local shortest = {id=-1,len=99}
+	for i,route in ipairs(routes) do
+		if route.total_cost == 0 then
+			if route.length < shortest.len then
+				if routes[shortest.id] then routes[shortest.id] = nil end
+				shortest.id = i
+				shortest.len = route.length
+			else
+				routes[i]=nil
+			end
+		end
+	end
+	-- TODO: remove duplicates (where all color costs are same, len or cities does not matter)
+	for i,route in ipairs(routes) do
+		local costs = route.costs
+		for j,r in ipairs(routes) do
+			if r then
+				local same = true
+				for color,cost in pairs(costs) do
+					if not(r[color]) or r[color].cost ~= cost then same = false; break end
+				end
+				if same then routes[j] = nil end
+			end
+		end
+	end
+
+	log("routes after pruning:")
+	log(routes)
+
+	--condense routes table after all pruning (remove nil entries)
+	local temp = {}
+	for _,route in pairs(routes) do
+		if route then table.insert(temp,1,route) end
+	end
+	routes = temp
+
+	log("routes after condensing:")
+	log(routes)
+
+	--TODO: set up pending action
+	--TODO: lock pawn
+	--TESTING calculate route costs
+	--TODO: set up route picker dialog and display it
+			--handler will charge player cost for move TODO: set in pending action that can be undone?
+
 end
 
 --[[ *****************************
@@ -1216,7 +1540,7 @@ function startPlayerTurn(pcol)
 		elseif action.id == "build" or action.free then pool = true
 		elseif action.id == "move" or action.free then move = true
 		elseif action.id == "track" then track = true
-		elseif action.id == "character" then char = true
+		elseif action.id == "exchange" then char = true
 		end
 	end
 	if player.free_action then pool,move = true,true end   --TODO: FIX free_action
@@ -1226,7 +1550,7 @@ function startPlayerTurn(pcol)
 	if track then governorButtons(true) end
 	if char then charactersLock(pcol, false) end
 	--enable player board for actions
-	local txt = "Execute actions in any order.\n"
+	local txt = "Execute actions in any order.\n" 			--TODO: make this a constant?
 	txt = txt.."May move Architect at any time.\n"
 	txt = txt.."All required actions must be executed.\n"
 	for _,p in ipairs(GD.game.player_order) do
@@ -1290,6 +1614,18 @@ function playerDone(pcol)
 		if #player.pending_actions == 0 then
 			log("*** WARN: playerDone() no actions to finalize for player "..pcol)
 		end
+		if failedActions(pcol) then
+			for color,player in pairs(GD.game.players) do
+				if color ~= pcol then
+					player.gold = player.gold + 2
+					getObjectFromGUID(C.player_boards[color]).call("setState",{gold_coins=player.gold})
+					if GD.env.verbose then printToAll(color.." recieves +2 gold") end
+				end
+			end
+		elseif hasRequiredActions(pcol) then
+			UI.setAttribute("penalty_dialog_pnl","visibility","Pink|"..pcol)
+			return
+		end
 		while #player.pending_actions > 0 do
 			local index = #player.pending_actions
 			local action = player.pending_actions[index]
@@ -1297,8 +1633,20 @@ function playerDone(pcol)
 				player.governor_clicked = false
 			elseif action.key == "gold" then
 				--noop
-			elseif action.key == "character" then
-				log("TODO: finalize character action <---------------")
+			elseif action.key == "exchange" then
+				if action.bank then
+					updateTurnOrder()
+				else
+					--lock game progression and show confirmation dialog for replace character
+					GD.game.wait_for_character_replace = true
+					local opp = GD.game.players[action.opponent]
+					opp.replace_character = true
+					UI.setAttribute("replace_done_pnl","visibility","Pink")
+					UI.setAttribute("replace_undo_pnl","visibility","Pink")
+					UI.setAttribute("replace_character_txt","text",action.opponent)
+					UI.setAttribute("replace_character_txt","color",action.opponent)
+					UI.setAttribute("replace_character_pnl","active",true)
+				end
 
 			elseif action.key == "palace" then
 				log("TODO: finalize palace action <---------------")
@@ -1320,22 +1668,6 @@ function playerDone(pcol)
 			if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
 			table.remove(player.pending_actions, index)
 		end
-		-- if player.failed_actions then
-		if failedActions(pcol) then
-			--give other players +2 gold automatically
-			for color,player in pairs(GD.game.players) do
-				if color ~= pcol then
-					player.gold = player.gold + 2
-					getObjectFromGUID(C.player_boards[color]).call("setState",{gold_coins=player.gold})
-					if GD.env.verbose then printToAll(color.." recieves +2 gold") end
-				end
-			end
-		else
-			if hasRequiredActions(pcol) then
-				UI.setAttribute("penalty_dialog_pnl","visibility","Pink|"..pcol)
-				return
-			end
-		end
 		endTurn(pcol)
 	else
 		log("*** ERROR: unknown game stage")
@@ -1347,8 +1679,6 @@ Check for end of round & start a new one otherwise start next players turn
 ********************************]]
 function endTurn(pcol)
 	if env.test.trace then log("endTurn() "..tostring(pcol)) end
-	local index = indexOf(GD.game.remaining_round_players,pcol)    --HACK: is there a better way to do this?
-	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
 	--clear out all player turn data`
 	local player = GD.game.players[pcol]
 	player.has_actions = false
@@ -1359,18 +1689,19 @@ function endTurn(pcol)
 	unplayedPalacesLock(pcol, true)
 	buildPoolLock(pcol, true)
 	placedHousesLock(pcol, true)
-
-	--TODO: character cards lock ???
-
-	--TODO: remove gov track buttons ???
-	--governorButtons(false)
-
 	--update round and check for end of round or end of game
-	table.remove(GD.game.remaining_round_players,index)  --HACK: is there a better way to do this?
-	if #GD.game.remaining_round_players == 0 then
-		finishCurrentRound()
+	local index = indexOf(GD.game.remaining_round_players,pcol)
+	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
+	table.remove(GD.game.remaining_round_players,index)
+	if not(GD.game.wait_for_character_replace) then
+		if #GD.game.remaining_round_players == 0 then
+			finishCurrentRound()
+		else
+			startPlayerTurn(setNextPlayer())
+		end
 	else
-		startPlayerTurn(setNextPlayer())
+		if GD.env.verbose then broadcastToAll("Waiting on a player to select a replacement character") end
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=false,done=false,undo=false})
 	end
 end
 
@@ -1439,6 +1770,7 @@ function playerUndo(pcol)
 		updateStatusPanel()
 		governorButtons(true)
 		resetAction(pcol, action)
+		updateDialUI(pcol)
 		player.governor_clicked = false
 		action.status = ""
 	elseif action.key == "build" then
@@ -1463,6 +1795,46 @@ function playerUndo(pcol)
 			player.gold = player.gold + 1
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 		updateDialUI(pcol)
+	elseif action.key == "exchange" then
+		if action.type == "replace" then --TODO: maybe move this to the dialog btn handler for undo?  get rid of type then perhaps
+			local obj = getObjectFromGUID(action.undo.guid)
+			obj.setPosition(action.undo.snapback.pos)
+			obj.setRotation(action.undo.snapback.rot)
+			obj.setLock(false)
+			player.replace_character = true
+		elseif action.type == "exchange" then
+			local new = getObjectFromGUID(action.undo.new_guid)
+			local old = getObjectFromGUID(action.undo.old_guid)
+			new.setPosition(action.undo.snapback.pos)
+			new.setRotation(action.undo.snapback.rot)
+			new.setLock(false)
+			local player_board = getObjectFromGUID(C.player_boards[action.player_color])
+			old.setPosition(player_board.positionToWorld(C.player_board_character_location))
+			old.setRotation(player_board.getRotation())
+			old.setLock(false)
+			player.character_id = action.old_char_id
+			setCharacterBonus(pcol)
+			local txt = "Execute actions in any order.\n"			--TODO: make this a constant?
+			txt = txt.."May move Architect at any time.\n"
+			txt = txt.."All required actions must be executed.\n"
+			txt = txt..C.character_bonus_descriptions[player.character_id]
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=active,done=active,undo=true,help_text=txt})
+			if action.undo.extra_actions ~= nil then
+				player.extra_actions = player.extra_actions + action.undo.extra_actions
+				getObjectFromGUID(C.player_boards[pcol]).call("setState",{extra_actions=player.extra_actions})
+			elseif action.undo.gold ~= nil then
+				player.gold = player.gold + action.undo.gold
+				getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+			elseif action.undo.free_action then
+				for i,a in ipairs(player.turn_actions) do
+					if a.free then table.remove(player.turn_actions, i); break end
+				end
+			end
+			resetAction(pcol, action)
+			updateDialUI(pcol)
+		else
+			log("*** ERROR: playerUndo() unknown action type")
+		end
 	else
 		log("*** ERROR: playerUndo() unknown action key "..tostring(action.key))
 		return
@@ -1494,7 +1866,6 @@ function moveMaharaja()
 	local pos = board.positionToWorld(C.cities[city].maharaja_pos)
 	local maha = getObjectFromGUID(C.maharaja_guid)
 	maha.setLock(false)
-	-- maha.setPositionSmooth(pos, false, true)
 	maha.setPosition(pos)
 	Wait.condition(function() maha.setLock(true) end, function() return(maha.resting) end, 2)
 	-- move table 1st to 7th, shift others up
@@ -1522,7 +1893,64 @@ end
 --[[/////////////// Support functions /////////////////////]]
 
 --[[ *****************************
-Searches player's dial actions for an unfinished action matching the supplied pending action.
+Set the character bonus based on current character ID.
+If character is Builder (#5) then add a free build action
+Update dial UI
+********************************]]
+function setCharacterBonus(pcol)
+	if env.test.trace then log("setCharacterBonus()") end
+	local player = GD.game.players[pcol]
+	log("Player character ID = "..tostring(player.character_id))
+	player.character_bonus = nil
+	if player.character_id == 7 then player.character_bonus = "+1_extra_action"
+	elseif player.character_id == 6 then player.character_bonus = "build_palace_discount"
+	elseif player.character_id == 5 then
+		local has_free_action = false
+		for _,a in ipairs(player.turn_actions) do
+			if a.free then has_free_action = true; break end
+		end
+		if not(has_free_action) then --TODO: is this check necessary?  Is there a scenario player had it, then gets it back? Possibly.
+			local action = simpleDeepCopy(C.dial_actions[9].actions[1])
+			action.status = ""
+			action.pointer_id = ""
+			action.free = true
+			table.insert(player.turn_actions,action)
+		end
+		player.character_bonus = "free_build_move"
+	elseif player.character_id == 4 then player.character_bonus = "free_travel"
+	elseif player.character_id == 3 then player.character_bonus = "outer_palace_scoring"
+	elseif player.character_id == 2 then player.character_bonus = "+1_gold"
+	else
+		log("***ERROR: setCharacterBonus() Unknown character id for "..tostring(pcol))  --debugging
+	end
+	updateDialUI(pcol)
+end
+
+
+--[[ *****************************
+Searches player's turn actions for an unfinished pointer (selected) action matching the
+supplied pending action key.
+if one is found, the pending_action table is updated with the corresponding player's turn_actions index.
+If not, then the pending_action is updated with a -1 to indicate no corresponding turn action.
+********************************]]
+function setActionIndex(pcol, pending_action)
+	if env.test.trace then log("setActionIndex(): "..tostring(pcol)) end
+	local action_index = -1
+	local player = GD.game.players[pcol]
+	for i,a in ipairs(player.turn_actions) do
+		if a.id == pending_action.key and a.status == "" and a.pointer_id ~= "" then
+			action_index = i
+			break
+		end
+	end
+	if action_index == -1 then
+		if env.test.debug then log("setActionIndex(): No matching turn action found for "..tostring(pending_action.key)) end
+	end
+	pending_action.action_index = action_index
+end
+
+--[[ *****************************
+Searches player's turn actions for an unfinished action matching the supplied pending action.
 if supplied action is "free" then only checks for free dial action.
 Otherwise searches all dial actions.
 if one is found, it is set to "Done" (finished) and returns true.
@@ -1530,36 +1958,40 @@ If no unfinished matching action is found returns false.
 TODO: get rid of return value, earlier calls to hasAvailableAction() should prevent a failed lookup here.
 HACK: special case for city only build
 ********************************]]
-function updateDialAction(pcol, action)
-	if env.test.trace then log("updateDialAction() "..tostring(pcol)..", "..tostring(action.key)) end
-	log(action)   --TODO: LOGGING
+function updateTurnAction(pcol, pending_action)
+	if env.test.trace then log("updateTurnAction() "..tostring(pcol)..", "..tostring(pending_action.key)) end
 	local player = GD.game.players[pcol]
-	if action.free_action then   --TODO: FIX free_action
+	local success = false
+	if pending_action.free_action then   --TODO: FIX free_action
 		for _,a in ipairs(player.turn_actions) do
 			if a.free then
 				a.status = "Done"
-				return true
+				success = true
+				break
 			end
 		end
 	else
 		for index,a in ipairs(player.turn_actions) do
-			if a.index == action.action_index then
+			if a.index == pending_action.action_index then
 				if a.city_required then
-					if action.location == "city" then    --HACK: ugly special case
+					if pending_action.location == "city" then    --HACK: ugly special case
 						a.status = "Done"
-						return true
+						success = true
+						break
 					end
 				else
 					a.status = "Done"
-					return true
+					success = true
+					break
 				end
 			end
 		end
 	end
-	--this really shouldn't happen if earlier checks are working, here for debugging
-	log("***ERROR: updateDialAction() could not locate turn action for pending action:")
-	log(action)
-	return false
+	if not(success) then
+		--this really shouldn't happen if earlier checks are working, here for debugging
+		log("***ERROR: updateTurnAction() could not locate turn action for pending action:")
+		log(pending_action)
+	end
 end
 
 --[[ *****************************
@@ -1679,7 +2111,7 @@ function charactersLock(pcol, locked)
 	local player = getObjectFromGUID(pcol)
 	for id,char in ipairs(C.characters) do
 		if not(player) or player.character_id ~= id then
-			getObjectFromGUID(char.g)setLock(locked)
+			getObjectFromGUID(char.g).setLock(locked)
 		end
 	end
 end
@@ -1859,6 +2291,7 @@ might detect as a nearby village.  Minor thing.
 ********************************]]
 function closestNode(pos)
 	if env.test.trace then log("closestNode()") end
+	assert(pos, "***ERROR: closestNode() missing pos")
 	local board = getObjectFromGUID(C.board_guid)
 	local nearest_node = -1
 	local shortest_dist = nil

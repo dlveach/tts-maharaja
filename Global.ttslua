@@ -48,8 +48,8 @@ env.test.auto_switch = true
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
 -- env.test.players = {"Green","Red",}
-env.test.players = {"Green","Red","Blue"}
--- env.test.players = {"Red","Green","Purple",}
+-- env.test.players = {"Green","Red","Blue"}
+env.test.players = {"Red","Green",}
 
 env.game = {}
 env.game.fill_delay = 2
@@ -92,6 +92,10 @@ function onLoad(save_state)
 		GD.game = {}
 		GD.game.stage = "setup"
 		GD.game.round = 1
+		GD.game.city_scores = {}
+		for name,_ in pairs(C.cities) do
+			GD.game.city_scores[name] = {}
+		end
 		GD.env = {}
 		GD.env.use_auction = false
 		UI.setAttribute("opt_use_auction","isOn",GD.env.use_auction)
@@ -684,7 +688,7 @@ function setupPlayers()
 		reloadUI(C.player_boards[pcol])
 		GD.game.players[pcol] = simpleDeepCopy(C.player_data)
 		local player = GD.game.players[pcol]
-		player.pawn_location = {
+		player.architect_location = {
 			current_node = 38,
 			dest_node = -1,
 			snap_pos = getObjectFromGUID(C.player_pawns[pcol]).getPosition(),
@@ -701,6 +705,10 @@ function setupPlayers()
 			table.insert(player.pool, i, {g=nil,p=pos})
 		end
 		GD.game.status_visibility = GD.game.status_visibility..'|'..pcol
+		--initialize the city scores table
+		for name,_ in pairs(C.cities) do
+			GD.game.city_scores[name][pcol] = 0
+		end
 	end
 	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
 	GD.game.current_player = math.random(#GD.game.player_order)
@@ -1188,6 +1196,7 @@ function houseDrop(pcol, obj)
 	local player = GD.game.players[pcol]
 	local color = obj.getName()
 	--/////// local functions ///////
+
 	--[[TODO: document]]
 	local function snapBack(obj)
 		local pos = placedObjSnap(obj.getGUID())
@@ -1199,6 +1208,8 @@ function houseDrop(pcol, obj)
 			obj.setRotation(getObjectFromGUID(C.player_boards[color]).getRotation())
 		end
 	end
+
+	--[[TODO: document]]
 	local function placeVillageHouse(obj, node)
 		table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
 		local pos = board.positionToWorld(node.center)
@@ -1213,12 +1224,27 @@ function houseDrop(pcol, obj)
 		obj.setPosition(pos)
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
+
 	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
-		--TODO: this
-		log("TODO: local function placeCityHouse() <------------------------- ")
+		local color = obj.getName()
+		local center = GD.network[node.id].center
+		log(tostring(node.name).." center is "..tostring(center))
+		local index = #node.houses[color] + 1
+		log("TODO: handle more than 6 houses of a color in a city.  <-------------------")
+		local offset = Vector(C.city_house_offsets[color][index].o)
+		log("placing "..color.." house "..obj.getGUID().." with offset "..tostring(offset))
+		local pos = center - offset
+		local rot = Vector(C.city_house_offsets[color][index].r)
+		pos.y = 1.5
+		obj.setRotationSmooth(rot, false, true)
+		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
+		table.insert(node.houses[color],obj.getGUID())
+		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
-	--[[Override this function locally for house drop special case handling
+
+	--[[  TODO: merge with global helper function?
+	Override this function locally for house drop special case handling
 	find first available turn action for the pending_action.key
 	Search required actions (dial selected) first, then try free action. ]]
 	local function setActionIndex(pcol, pending_action)
@@ -1254,6 +1280,7 @@ function houseDrop(pcol, obj)
 		pending_action.free_action = free_action
 	end
 	--//////////////////////////////////
+
 	local pos = obj.getPosition()
 	pos.y = 0
 	local node_index = closestNode(pos)
@@ -1310,6 +1337,9 @@ function houseDrop(pcol, obj)
 					},
 				},
 			}
+
+			log("TODO: TEST move house action. <--------------------------- ")
+
 			if not(pending_action.undo.snapback.pos) then --this house coming from player's pool
 				pending_action.undo.snapback.pos = getPlayerBoardLocation(obj)
 				pending_action.undo.snapback.rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
@@ -1334,7 +1364,15 @@ function houseDrop(pcol, obj)
 					placeVillageHouse(obj,node)
 				end
 			else
-				placeCityHouse(obj, node)
+				if player.architect_location.current_node == node_index then
+					placeCityHouse(obj, node)
+					updateCityScores(node)
+					updateStatusPanel()
+				else
+					snapBack(obj)
+					if GD.env.verbose then broadcastToColor("Architect must be present in the city", pcol) end
+					return
+				end
 			end
 			if pending_action.key == "build" and not(pending_action.free_action) then
 				player.gold = player.gold - 1
@@ -1366,7 +1404,7 @@ function architectDrop(pcol, obj)
 	local player = GD.game.players[pcol]
 	local color = obj.getName()
 	local function snapback(obj)
-		local pos = player.pawn_location.snap_pos
+		local pos = player.architect_location.snap_pos
 		assert(pos, "***ERROR: architectDrop() invalid snap back position")
 		obj.setPosition(pos)
 	end
@@ -1383,16 +1421,17 @@ function architectDrop(pcol, obj)
 		snapback(obj)
 		return
 	end
-	if node_index == player.pawn_location.current_node then
+	if node_index == player.architect_location.current_node then
 		snapback(obj)
 		return
 	end
+
 	--position pawn on city location
 	obj.setPosition(board.positionToWorld(node.center - Vector(C.city_pawn_offsets[pcol])))
 
 	--/////////// TESTING
 	updatePathTable(pcol)
-	local start_id = player.pawn_location.current_node
+	local start_id = player.architect_location.current_node
 	local dest_id = node_index
 	local tmp = buildRouteTable(start_id, dest_id)
 	if #tmp == 0 then --no valid route
@@ -1478,11 +1517,15 @@ function architectDrop(pcol, obj)
 	log("routes after condensing:")
 	log(routes)
 
-	--TODO: set up pending action
-	--TODO: lock pawn
-	--TESTING calculate route costs
+	--TODO: set up pending action (maybe in route picker handler)
+	log("TODO: create an undo pending action for architect move. <---------------------")
+
 	--TODO: set up route picker dialog and display it
 			--handler will charge player cost for move TODO: set in pending action that can be undone?
+
+	--TODO: this player update may move to route picker dialog handler, to finalize pawn placement
+	player.architect_location.current_node = node_index
+	player.architect_location.snap_pos = obj.getPosition()
 
 end
 
@@ -1774,26 +1817,33 @@ function playerUndo(pcol)
 		player.governor_clicked = false
 		action.status = ""
 	elseif action.key == "build" then
-		log("TESTING: undoing build house action")
 		local obj = getObjectFromGUID(action.undo.guid)
 		obj.setPosition(action.undo.snapback.pos)
 		obj.setRotation(action.undo.snapback.rot)
 		obj.setLock(false)
 		local node = GD.network[action.undo.node_index]
 		if node.type == "city" then
-			log("TODO: handle undo for city build <--------------------- ")
-		end
-		if node.houses[1] and node.houses[1].g == action.guid then
-			node.houses[1] = nil
-		elseif node.houses[2] and node.houses[2].g == action.guid then
-			node.houses[2] = nil
+			local i = indexOf(node.houses[pcol], action.guid)
+			if i > 0 then
+				table.remove(node.houses[pcol], i)
+			else
+				log("***ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))
+			end
+			updateCityScores(node)
+			updateStatusPanel()
 		else
-			log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))
-			return
+			if node.houses[1] and node.houses[1].g == action.guid then
+				node.houses[1] = nil
+			elseif node.houses[2] and node.houses[2].g == action.guid then
+				node.houses[2] = nil
+			else
+				log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))
+				return
+			end
 		end
-			resetAction(pcol, action)
-			player.gold = player.gold + 1
-			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+		resetAction(pcol, action)
+		player.gold = player.gold + 1
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 		updateDialUI(pcol)
 	elseif action.key == "exchange" then
 		if action.type == "replace" then --TODO: maybe move this to the dialog btn handler for undo?  get rid of type then perhaps
@@ -1925,7 +1975,6 @@ function setCharacterBonus(pcol)
 	end
 	updateDialUI(pcol)
 end
-
 
 --[[ *****************************
 Searches player's turn actions for an unfinished pointer (selected) action matching the
@@ -2116,18 +2165,48 @@ function charactersLock(pcol, locked)
 	end
 end
 
---[[ *****************************
-TODO: document
+--[[ ***************************
+For a given network node (that is a city) update the
+City score for each player
+********************************]]
+function updateCityScores(node)
+	if env.test.trace then log("updateCityScores() "..tostring(node.name)..", "..tostring(node.id)) end
+	assert(node.type == "city", "***ERROR: updateCityScores() node "..tostring(node.id).." is not a city")
+	for _,pcol in ipairs(GD.game.player_order) do
+		local score = #node.houses[pcol]
+		for _,palace in pairs(node.palaces) do
+			if palace.c == pcol then
+				if palace.center then
+					score = score + 3
+				elseif GD.game.players[pcol].character_id == 3 then
+					score = score + 2
+				else
+					score = score + 1
+				end
+			end
+		end
+		GD.game.city_scores[node.name][pcol] = score
+	end
+end
+
+--[[ ***************************
+Update city names and images from GD.game.governor_track
+Update corresponding player score for each associated city
 ********************************]]
 function updateStatusPanel()
 	if env.test.trace then log("updateStatusPanel()") end
-	--update city names and images from GD.game.governor_track
 	for i,gov in ipairs(GD.game.governor_track) do
 		UI.setAttribute("status_city_name_"..gov.UI_row, "text", gov.city)
 		UI.setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
+		local scores = GD.game.city_scores[gov.city]
+		for pcol,score in pairs(scores) do
+			if score > 0 then
+				UI.setAttribute("status_p_text_"..tostring(gov.UI_row).."_"..pcol,"text",tostring(score))
+			else
+				UI.setAttribute("status_p_text_"..tostring(gov.UI_row).."_"..pcol,"text","")
+			end
+		end
 	end
-	--update player scores per city
-	log("TODO: update status panel city scores <---------------")
 end
 
 --[[ *****************************
@@ -2170,6 +2249,8 @@ function placedObjSnap(guid)
 			list = GD.game.players[pcol].placed_houses
 		elseif obj.memo == "palace" then
 			list = GD.game.players[pcol].placed_palaces
+		elseif obj.memo == "architect" then
+			if obj.getName() == pcol then return GD.game.players[pcol].architect_location.snapback end
 		end
 		if list[guid] then return list[guid] end
 	end
@@ -2535,7 +2616,7 @@ able to consolidate this into one table
 Returns a table of discovered routes.
 ********************************]]
 function buildRouteTable(start_id, dest_id)
-	if env.test.trace then log("updatePathTable() start: "..tostring(start_id)..", dest: "..tostring(dest_id)) end
+	if env.test.trace then log("buildRouteTable() start: "..tostring(start_id)..", dest: "..tostring(dest_id)) end
 	local sub_debug = false
 	local start, dest
 	local route_table = {}

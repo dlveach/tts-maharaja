@@ -210,7 +210,7 @@ C.player_data = {
   pending_actions = {},
   turn_actions = {},
   status_panel = true,
-  pawn_location = {},
+  architect_location = {},
 }
 
 --action dial STUFF

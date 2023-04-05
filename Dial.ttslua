@@ -6,6 +6,8 @@ Maharaja player action dial
         --mostly done, refactored a lot into setState()
     - implement "extra action" pointer and support
 
+  --TODO: move g_ constants to C. Constants.ttslua definitions, merge g_player_colors, g_buttons to global definitions.
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////]]
 
 
@@ -34,53 +36,18 @@ g_back_decal = {
 }
 g_player_colors = {"Yellow","Red","Green","Blue","Purple"}
 
--- g_actions = {
---  	["track"] = {
---     {id="track",label="Modify the Governor Track",},
---   },
---  	["coins"] = {
---     {id="gold",label="Get 2 Gold from the bank",},
---   },
---  	["character"] = {
---     {id="exchange",label="Exchange your Character",},
---   },
---  	["palace-house"] = {
---     {id="palace",label="Build a Palace (City)",},
---     {id="house",label="Build a House (City/Village)",},
---   },
---  	["palace"] = {
---     {id="palace",label="Build a Palace (City)",},
---   },
---  	["quarry"] = {
---     {id="quarry",label="Quarry 2 Houses into the pool",},
---   },
---  	["move"] = {
---     {id="move",label="Move a House City/Village",},
---   },
---  	["2houses"] = {
---     {id="city_house",label="Build a House (City)",},
---     {id="house",label="Build a House (City/Village)",},
---   },
---  	["house"] = {
---     {id="house",label="Build a House (City/Village)",},
---   },
---   ["free"] = {
---     {id="free-build-move",label="Free Build/Move House (City/Village)",},
---   },
--- }
-
 env = {}
 
 --[[ *****************************
 TTS Load function
 ********************************]]
-function onLoad(save_state)
+function onLoad(saved_data)
   GD = {}
   GD.color = self.getName()
   gid = GD.color.."_dial"
   env = Global.getTable("env")
   assert(env, "*** ERROR: no env from Global")
-  if save_state ~= "" then
+  if saved_data ~= "" then
     if env.test.trace then log(gid..": onLoad(): Loading from saved state") end
     local restore_data = JSON.decode(saved_data)
     GD = restore_data
@@ -90,6 +57,8 @@ function onLoad(save_state)
     if GD.state.back_button_enabled then enableBackButton() else disableBackButton() end
     if GD.state.hidden then hideMe() else showMe() end
     if GD.state.action_UI_enabled then enableActionUI() else disableActionUI() end
+
+    log(gid..": onLoad() save/restore pointer direction?")
   else
     if env.test.trace then log(gid..": onLoad(): Loading from fresh state") end
     GD.state = {}
@@ -97,7 +66,7 @@ function onLoad(save_state)
     GD.state.flipped = self.is_face_down
     GD.state.extra_action = false
     GD.state.buttons_enabled = false
-    GD.state.hidden = true
+    GD.state.hidden = false
     GD.state.action_UI_enabled = false
     --setup player visibility string for hiding self
     GD.hide_from_players = {}
@@ -107,7 +76,9 @@ function onLoad(save_state)
       end
     end
     self.setDecals({})
+    local rot = self.getRotation()
     local p = simpleDeepCopy(g_pointer)
+    p.rotation.z = rot.z + 180
     p.name = "pointer-1"
     self.addDecal(p)
     p.name = "pointer-2"
@@ -132,39 +103,11 @@ function onSave()
   return saved_data
 end
 
---[[ ******** DEPRECATED *********
+--[[ ******** TODO: DEPRECATED *********
 Update action UI panel based on current state.
 ********************************]]
 function updateUI()
   log(gid..": ***WARN: updateUI() is deprecated")
-  -- if env.test.trace then log(gid..": updateUI()") end
-  -- for i=1,7 do
-  --   self.UI.setAttribute("row_action_"..tostring(i),"active",false)
-  -- end
-  -- for i,entry in ipairs(GD.state.actions) do
-  --   if entry.type == "selected" or entry.type == "extra" then
-  --     self.UI.setAttribute("action_text_"..tostring(i),"text",entry.label)
-  --     self.UI.setAttribute("action_text_"..tostring(i), "color", "rgb(1,1,0)")
-  --     self.UI.setAttribute("row_action_"..tostring(i),"active",true)
-  --     self.UI.setAttribute("status_text_"..tostring(i),"text",entry.status)
-  --     if entry.status == "Done" then
-  --       self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
-  --     elseif entry.status =="Incomplete" then
-  --       self.UI.setAttribute("action_text_"..tostring(i), "color", "Gray")
-  --       self.UI.setAttribute("status_text_"..tostring(i), "color", "Red")
-  --     end
-  --   elseif entry.type == "free" then
-  --     self.UI.setAttribute("action_text_7","text",entry.label)
-  --     self.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
-  --     self.UI.setAttribute("row_action_7","active",true)
-  --     self.UI.setAttribute("status_text_7","text",entry.status)
-  --     if entry.status == "Done" then
-  --       self.UI.setAttribute("action_text_7", "color", "Gray")
-  --     end
-  --   else
-  --     log("***WARN: unknown action entry type: "..tostring(entry.type))
-  --   end
-  -- end
 end
 
 --[[ *****************************
@@ -181,8 +124,6 @@ function reset()
     if i==2 then assert(decal.name == "pointer-2", gid..": ERROR: setPointerRotation(): Invalid pointer 2 decal") end
     if decal.name == "pointer-extra" then extra = i end
   end
-  -- decals[1].rotation.z = rot.z + 180
-  -- decals[2].rotation.z = rot.z + 180
   decals[1].rotation.z = rot.z
   decals[2].rotation.z = rot.z
   if extra > 0 then table.remove(decals,extra) end
@@ -404,6 +345,9 @@ function setPointerRotation(id, index)
   local offset = g_pointer_rot_offsets[index]
   assert(decals[1] ~= nil and decals[1].name == "pointer-1", gid..": ERROR: setPointerRotation(): Invalid pointer 1 decal")
   assert(decals[2] ~= nil and decals[2].name == "pointer-2", gid..": ERROR: setPointerRotation(): Invalid pointer 2 decal")
+
+  --TODO: save pointer rotations for restore from saved state or are decals preserved in game save?
+
   if id == decals[1].name then
     decals[1].rotation.z = rot.z + offset
   elseif id == decals[2].name then

@@ -21,13 +21,13 @@ BUTTON_PARAMS = {
 --[[ *****************************
 TTS Game Load and restore state if saved.
 ********************************]]
-function onLoad(save_state)
+function onLoad(saved_data)
   gid = self.getName().."_PlayerBoard:"
   env = Global.getTable("env")
   assert(env, "*** ERROR: no env from Global")
   GD = {}
   GD.color = self.getName()
-  if save_state ~= "" then
+  if saved_data ~= "" then
     if env.test.trace then log(gid.."onLoad(): Loading from saved state") end
     local restore_data = JSON.decode(saved_data)
     GD = restore_data

@@ -41,7 +41,7 @@ env.test = {}
 env.test.trace = true
 env.test.debug = true
 env.test.in_dev = false
-env.test.force_fresh_save = true
+env.test.force_fresh_save = false
 env.test.save_positions = true
 env.test.auto_switch = true
 -- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
@@ -62,16 +62,13 @@ GD = {}
 --[[ *****************************
 TTS Game Load
 ********************************]]
-function onLoad(save_state)
+function onLoad(saved_data)
 	if env.test.force_fresh_save then saved_data = "" end
 	--Initialize stuff
 	if not(env.test.in_dev) then
 		getObjectFromGUID(C.board_guid).interactable = false
 		getObjectFromGUID(C.palace_object_guid).setInvisibleTo(Color.list)
 		getObjectFromGUID(C.house_object_guid).setInvisibleTo(Color.list)
-		for _,g in pairs(C.action_dials) do
-			getObjectFromGUID(g).setInvisibleTo(Color.list)
-		end
 	end
 	UI.setAttribute("penalty_dialog_pnl","visibility","Pink")
 	UI.setAttribute("penalty_dialog_pnl","active","true")
@@ -81,9 +78,14 @@ function onLoad(save_state)
 	--Reload saved data or if fresh load initialize everything
 	if (saved_data ~= "") then
     log("onLoad(): load with saved data")
+		log("saved data:")
+		log(saved_data)
     local restore_data = JSON.decode(saved_data)
     GD = restore_data
-    restoreGameState()
+		if GD.game.stage ~= "setup" then  --HACK: don't show dialog if not restoring an active game.
+			UI.setAttribute("restore_dialog_pnl", "active", true)
+		end
+    Wait.frames(function() restoreGameState() end, 10)
   else
 		log("onLoad(): load with fresh state")
 		GD.state = {}
@@ -98,12 +100,15 @@ function onLoad(save_state)
 		end
 		GD.env = {}
 		GD.env.use_auction = false
-		UI.setAttribute("opt_use_auction","isOn",GD.env.use_auction)
+		UI_setAttribute("opt_use_auction","isOn",GD.env.use_auction)
 		GD.env.verbose = true
-		UI.setAttribute("opt_verbose","isOn",GD.env.verbose)
+		UI_setAttribute("opt_verbose","isOn",GD.env.verbose)
 		for _,g in pairs(C.player_pawns) do
 			getObjectFromGUID(g).setLock(true)
 		end
+		GD.game.status_visibility = false
+		UI_setAttribute("status_info","visibility",GD.game.status_visibility)
+		UI_setAttribute("startPanel","active",true)
 	end
 end
 
@@ -115,11 +120,13 @@ function reloadUI(guid)
 	if guid then
 		local obj = getObjectFromGUID(guid)
 		if obj ~= nil then
+			log("reloading object UI for guid "..tostring(guid))
 			obj.UI.setXml(obj.UI.getXml())
 		else
 			log("***WARN: reloadUI() unable to get object for "..tostring(guid))
 		end
 	else
+		log("reloading global UI")
 		UI.setXml(UI.getXml())
 	end
 end
@@ -128,9 +135,9 @@ end
 Save game state
 ********************************]]
 function onSave()
-	local saved_data = JSON.encode(GD)
-  if env.test.force_fresh_save then
-    saved_data = ""
+	local saved_data = ""
+  if not(env.test.force_fresh_save) then
+		saved_data = JSON.encode(GD)
   end
   return saved_data
 end
@@ -141,33 +148,64 @@ TODO: implement
 ********************************]]
 function restoreGameState()
 	if env.test.trace then log("restoreGameState()") end
-	log("TODO: restoreGameState()")
-	--TODO: TEST THIS: rebuild the status display XML
-	if GD.game.stage ~= "setup" then
+	log("TESTING: restoreGameState()")
+	if GD.game.stage == "setup" then
+		log("TODO: any game restore in setup stage? <----------------")
+	else
+		log("TESTING: Restoring game state in game play stages <-------------")
 		setupStatusPanel()
 		updateGovernorTrack()
 		updateStatusPanel()
-		for _,pcol in ipairs(GD.game.player_order) do
-			if GD.game.players[pcol].turn_actions ~= nil then updateDialUI(pcol) end
-			if GD.game.stage == "select_actions" then
-				local dial = getObjectFromGUID(C.action_dials[pcol])
-				dial.call("enableDialButtons")
-				dial.call("hideMe")
-				if dial.is_face_down then dial.call("flipMe") end
-			elseif GD.game.stage == "player_turns" then
-				--TODO: this
-				log("TODO: handle restore during player_turns game stage <----------------")
+		for pcol,player in pairs(GD.game.players) do
+			if player.turn_actions ~= nil and #player.turn_actions > 1 then
+				updateDialUI(pcol)
 			end
+			--TODO: is there any dial state restoration to do at all?
+			-- local dial = getObjectFromGUID(C.action_dials[pcol])
+			-- if GD.game.stage == "select_actions" then
+				-- log("TESTING: Restoring game state in select actions stage <-------------")
+				-- dial.call("enableDialButtons")
+				-- dial.call("hideMe")
+				-- if dial.is_face_down then dial.call("flipMe") end
+			-- elseif GD.game.stage == "player_turns" then
+				-- log("TESTING: Restoring game state in player turns stage <-------------")
+				-- if pcol == GD.game.current_player_color then
+				-- 	if dial.is_face_down then dial.call("showMe") end
+				-- elseif player.has_actions then
+				-- 	if dial.is_face_down then dial.call("showMe") end
+				-- else
+				-- 	if not(dial.is_face_down) then dial.call("hideMe") end
+				-- end
+			-- end
 		end
 	end
 
-	--TODO: replay global UI setattributes
+	Wait.time(function()
+		--[[ replay saved global UI setAttributes --]]
+		if env.test.debug then log("replay saved global UI setAttributes") end
+	  for key,value in pairs(GD.state.global_UI) do
+	    local id = Split(key, '|')[1]
+	    local field = Split(key, '|')[2]
+	    local success = UI.setAttribute(id, field, value)
+	    if not(success) and env.test.debug then
+	      log("ERROR: restoreGameState(): Unable to setAttribute for global UI "..field.." on id "..id.." to "..tostring(value))
+	    end
+	  end
 
-	--TODO: replay main board UI setattributes
-
-	--TODO: confirm UI restore for all player boards handled in board onLoad() ???
-
-	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
+		--[[ replay saved board UI setAttributes --]]
+	  if env.test.debug then log("replay saved board UI setAttributes") end
+	  local board = getObjectFromGUID(C.board_guid)
+	  for key,value in pairs(GD.state.board_UI) do
+	    local id = Split(key, '|')[1]
+	    local field = Split(key, '|')[2]
+			local success = board.UI.setAttribute(id, field, value)
+	    if not(success) and env.test.debug then
+	      log("ERROR: restoreGameState(): Unable to setAttribute for board UI "..field.." on id "..id.." to "..tostring(value))
+	    end
+	  end
+		UI.setAttribute("status_info","visibility",GD.game.status_visibility)
+		UI.setAttribute("restore_dialog_pnl","active",false)
+	end, 1)
 end
 
 --[[ ******************************
@@ -180,7 +218,7 @@ function UI_setAttribute(id, field, value)
   assert(type(id) == "string", "UI_setAttribute(): id must be a string")
   assert(type(field) == "string", "UI_setAttribute(): field must be a string")
   assert(value or value==false, "UI_setAttribute(): value missing")
-  GD.states.global_UI[id.."|"..field] = value
+  GD.state.global_UI[id.."|"..field] = value
   UI.setAttribute(id, field, value)
 end
 
@@ -194,7 +232,7 @@ function board_UI_setAttribute(id, field, value)
 	assert(type(id) == "string", "board_UI_setAttribute(): id must be a string")
 	assert(type(field) == "string", "board_UI_setAttribute(): field must be a string")
 	assert(value or value==false, "board_UI_setAttribute(): value missing")
-	GD.states.board_UI[id.."|"..field] = value
+	GD.state.board_UI[id.."|"..field] = value
 	return getObjectFromGUID(C.board_guid).UI.setAttribute(id, field, value)
 end
 
@@ -222,10 +260,10 @@ Setup: Handler for start game options
 function startOptionsBtn(player, value, id)
 	if env.test.trace then log("startGameBtn() "..player.color..", "..id..": "..tostring(value)) end
 	local setting = (value == 'True')
-	UI.setAttribute(id, "isOn", setting)
+	UI_setAttribute(id, "isOn", setting)
 	if id == "opt_use_auction" then
 		broadcastToAll("Sorry, not yet imlemented")		--TODO: remove this when imlpemented
-		UI.setAttribute(id, "isOn", false)
+		UI_setAttribute(id, "isOn", false)
 		return
 		-- GD.env.use_auction = setting
 	elseif id == "opt_verbose" then
@@ -244,7 +282,7 @@ function startGameBtn(player, btn, id)
 		broadcastToAll("At least 2 players needed to play")
 		return
 	end
-	UI.setAttribute("startPanel","active",false)
+	UI_setAttribute("startPanel","active",false)
 	Wait.frames(function() startGame() end, 10)
 end
 
@@ -345,7 +383,7 @@ function statusClick(player, btn, id)
 		end
 	end
 	-- if env.test.debug then log("Setting vis to "..GD.game.status_visibility) end
-	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
+	UI_setAttribute("status_info","visibility",GD.game.status_visibility)
 end
 
 --[[ *****************************
@@ -432,7 +470,7 @@ function penaltyDialogBtn(player, btn, id)
 		log("***ERROR: unknown command")
 		return
 	end
-	UI.setAttribute("penalty_dialog_pnl","visibility","Pink")
+	UI_setAttribute("penalty_dialog_pnl","visibility","Pink")
 end
 
 --[[ *****************************
@@ -442,7 +480,7 @@ Enable done button on player board.
 ********************************]]
 function dialModifyClick(player, btn, id)
 	if env.test.trace then log("dialModifyClick(): id="..tostring(id)) end
-  -- if player.color ~= GD.color then return end
+	GD.game.players[player.color].actions_set = false
 	local dial = getObjectFromGUID(C.action_dials[player.color])
 	dial.call("hideMe")
 	dial.call("enableDialButtons")
@@ -504,9 +542,9 @@ function replaceCharDialogBtn(player, btn, id)
 		GD.game.players[player.color].replace_character = false
 		table.remove(GD.game.players[player.color].pending_actions,index)
 		updateDialUI(player.color)
-		UI.setAttribute("replace_character_pnl","active",false)
-		UI.setAttribute("replace_done_pnl","visibility","Pink")
-		UI.setAttribute("replace_undo_pnl","visibility","Pink")
+		UI_setAttribute("replace_character_pnl","active",false)
+		UI_setAttribute("replace_done_pnl","visibility","Pink")
+		UI_setAttribute("replace_undo_pnl","visibility","Pink")
 		--unlock mutex, check for round end or advance to next player in round
 		GD.game.wait_for_character_replace = false
 		updateTurnOrder()
@@ -517,7 +555,7 @@ function replaceCharDialogBtn(player, btn, id)
 		end
 	elseif command == "undo" then
 		playerUndo(player.color)
-		UI.setAttribute("replace_undo_pnl","visibility","Pink")
+		UI_setAttribute("replace_undo_pnl","visibility","Pink")
 	else
 		log("*** ERROR replaceCharDialogBtn() unknown command")
 	end
@@ -555,18 +593,18 @@ Assumes governor track data has been initialized.
 ********************************]]
 function updateGovernorTrack()
 	if env.test.trace then log("updateGovernorTrack()") end
-	local board = getObjectFromGUID(C.board_guid)
+	-- local board = getObjectFromGUID(C.board_guid)
 	--fill base track images
 	for row=1,17 do
 		if row > 7 then
-			board.UI.setAttribute("gov_"..tostring(row),"image","Gray-"..(row-7))
+			board_UI_setAttribute("gov_"..tostring(row),"image","Gray-"..(row-7))
 		else
-			board.UI.setAttribute("gov_"..tostring(row),"image","Gray")
+			board_UI_setAttribute("gov_"..tostring(row),"image","Gray")
 		end
 	end
 	--set the governor images per gov track data table, overwriting base image set above
 	for i,entry in ipairs(GD.game.governor_track) do
-		board.UI.setAttribute("gov_"..tostring(entry.track_row),"image",entry.city)
+		board_UI_setAttribute("gov_"..tostring(entry.track_row),"image",entry.city)
 	end
 end
 
@@ -581,7 +619,7 @@ function startGame()
 	setupNetwork()
 	if not(setupPlayers()) then return end
 	setupStatusPanel()
-	UI.setAttribute("statusPanel","active","true")
+	UI_setAttribute("statusPanel","active","true")
 	--for testing, set solo player to start player color
 	local players = Player.getPlayers()
 	if #players == 1 then
@@ -696,6 +734,7 @@ function setupPlayers()
 		player.gold = 15
 		player.extra_actions = 0
 		player.turn_actions = {}
+		player.actions_set = false
 		player.pointers = {}
 		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
 		--initialize player pool
@@ -710,7 +749,7 @@ function setupPlayers()
 			GD.game.city_scores[name][pcol] = 0
 		end
 	end
-	UI.setAttribute("status_info","visibility",GD.game.status_visibility)
+	UI_setAttribute("status_info","visibility",GD.game.status_visibility)
 	GD.game.current_player = math.random(#GD.game.player_order)
 	GD.game.current_player_color = GD.game.player_order[GD.game.current_player]
 	broadcastToAll("Starting player will be "..GD.game.current_player_color)
@@ -846,7 +885,7 @@ function coroFillPlayerBoards()
 			player_board.call("setState",p)
 		end
 	end
-	getObjectFromGUID(C.board_guid).UI.setAttribute("governor_panel", "active", true)
+	board_UI_setAttribute("governor_panel", "active", true)
 	reloadUI(C.board_guid)
 	if env.test.trace then log("coroFillPlayerBoards(): EXIT") end
 	return 1
@@ -988,6 +1027,7 @@ function beginNextRound()
 	GD.game.stage = "select_actions"
 	for pcol,player in pairs(GD.game.players) do
 		player.has_actions = true
+		player.actions_set = false
 		player.turn_actions = {}
 		player.pointers = {}
 		setCharacterBonus(pcol)
@@ -1097,8 +1137,8 @@ function characterDrop(pcol, obj)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=false,undo=false,help_text=txt})
 			table.insert(player.pending_actions, pending_action)
 			player.replace_character = false
-			UI.setAttribute("replace_done_pnl","visibility",pcol)
-			UI.setAttribute("replace_undo_pnl","visibility",pcol)
+			UI_setAttribute("replace_done_pnl","visibility",pcol)
+			UI_setAttribute("replace_undo_pnl","visibility",pcol)
 		else
 			local curr_guid = C.characters[player.character_id].g
 			if curr_guid ~= obj.getGUID() then
@@ -1343,7 +1383,7 @@ function houseDrop(pcol, obj)
 			if not(pending_action.undo.snapback.pos) then --this house coming from player's pool
 				pending_action.undo.snapback.pos = getPlayerBoardLocation(obj)
 				pending_action.undo.snapback.rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
-				pending_action.key = "build"
+ 				pending_action.key = "build"
 			end
 			setActionIndex(pcol, pending_action)
 			if pending_action.action_index == -1 then
@@ -1627,14 +1667,21 @@ function playerDone(pcol)
 		if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
 		table.remove(player.pending_actions, 1)
 	elseif GD.game.stage == "select_actions" then  --Done during action selection
-			if player.choosing_extra_action then
-				setExtraAction(pcol)
-			else
+		if player.choosing_extra_action then
+
+			--TODO: extra action STUFF
+
+			setExtraAction(pcol)
+		else
 			log("Player clicked Done during action selection")   --TODO: LOGGING
+			player.actions_set = true
+			--TODO: BUG: use a flag on players when actions are set vs. checking pointers in for loop
+			log("Checking to see if all have set")
 			local all_set = true
 			for _,pdata in pairs(GD.game.players) do
-				if not(pdata.pointers["pointer-1"]) or not(pdata.pointers["pointer-2"]) then all_set = false end
+				if not(pdata.actions_set) then all_set = false; break end
 			end
+			log("all_set is "..tostring(all_set))
 			if all_set then
 				broadcastToAll("All players have set actions, starting player turns")
 				for _,pcol in ipairs(GD.game.player_order) do
@@ -1666,7 +1713,7 @@ function playerDone(pcol)
 				end
 			end
 		elseif hasRequiredActions(pcol) then
-			UI.setAttribute("penalty_dialog_pnl","visibility","Pink|"..pcol)
+			UI_setAttribute("penalty_dialog_pnl","visibility","Pink|"..pcol)
 			return
 		end
 		while #player.pending_actions > 0 do
@@ -1684,11 +1731,11 @@ function playerDone(pcol)
 					GD.game.wait_for_character_replace = true
 					local opp = GD.game.players[action.opponent]
 					opp.replace_character = true
-					UI.setAttribute("replace_done_pnl","visibility","Pink")
-					UI.setAttribute("replace_undo_pnl","visibility","Pink")
-					UI.setAttribute("replace_character_txt","text",action.opponent)
-					UI.setAttribute("replace_character_txt","color",action.opponent)
-					UI.setAttribute("replace_character_pnl","active",true)
+					UI_setAttribute("replace_done_pnl","visibility","Pink")
+					UI_setAttribute("replace_undo_pnl","visibility","Pink")
+					UI_setAttribute("replace_character_txt","text",action.opponent)
+					UI_setAttribute("replace_character_txt","color",action.opponent)
+					UI_setAttribute("replace_character_pnl","active",true)
 				end
 
 			elseif action.key == "palace" then
@@ -2196,14 +2243,14 @@ Update corresponding player score for each associated city
 function updateStatusPanel()
 	if env.test.trace then log("updateStatusPanel()") end
 	for i,gov in ipairs(GD.game.governor_track) do
-		UI.setAttribute("status_city_name_"..gov.UI_row, "text", gov.city)
-		UI.setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
+		UI_setAttribute("status_city_name_"..gov.UI_row, "text", gov.city)
+		UI_setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
 		local scores = GD.game.city_scores[gov.city]
 		for pcol,score in pairs(scores) do
 			if score > 0 then
-				UI.setAttribute("status_p_text_"..tostring(gov.UI_row).."_"..pcol,"text",tostring(score))
+				UI_setAttribute("status_p_text_"..tostring(gov.UI_row).."_"..pcol,"text",tostring(score))
 			else
-				UI.setAttribute("status_p_text_"..tostring(gov.UI_row).."_"..pcol,"text","")
+				UI_setAttribute("status_p_text_"..tostring(gov.UI_row).."_"..pcol,"text","")
 			end
 		end
 	end

@@ -68,6 +68,27 @@
 
 </Defaults>
 
+<Panel id="restore_dialog_pnl"  active="false"
+  height="120" width="420"
+  padding="10 10 10 10"
+  color="#003699"
+  image="Sprites/Layout/Base">
+  <Panel
+    color="#00091a"
+    image="Sprites/Layout/Base"
+    childAlignment="MiddleCenter">
+    <TableLayout>
+      <Row preferredHeight="100">
+        <Cell padding="0 0 0 0">
+          <Text class="large" color="Gray">
+            Restoring game from save ...
+           </Text>
+        </Cell>
+      </Row>
+    </TableLayout>
+  </Panel>
+</Panel>
+
 <Panel id="replace_character_pnl"   active="false"
   height="220" width="420"
   padding="10 10 10 10"
@@ -138,7 +159,7 @@
   </Panel>
 </Panel>
 
-<Panel id="startPanel"  active="true"
+<Panel id="startPanel"  active="false"
   allowDragging="true"
   height="400" width="500"
   padding="20 20 20 20"

@@ -48,8 +48,7 @@ env.test.auto_switch = true
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
 -- env.test.players = {"Green","Red",}
--- env.test.players = {"Green","Red","Blue"}
-env.test.players = {"Red","Green",}
+env.test.players = {"Green","Red","Blue"}
 
 env.game = {}
 env.game.fill_delay = 2
@@ -160,23 +159,6 @@ function restoreGameState()
 			if player.turn_actions ~= nil and #player.turn_actions > 1 then
 				updateDialUI(pcol)
 			end
-			--TODO: is there any dial state restoration to do at all?
-			-- local dial = getObjectFromGUID(C.action_dials[pcol])
-			-- if GD.game.stage == "select_actions" then
-				-- log("TESTING: Restoring game state in select actions stage <-------------")
-				-- dial.call("enableDialButtons")
-				-- dial.call("hideMe")
-				-- if dial.is_face_down then dial.call("flipMe") end
-			-- elseif GD.game.stage == "player_turns" then
-				-- log("TESTING: Restoring game state in player turns stage <-------------")
-				-- if pcol == GD.game.current_player_color then
-				-- 	if dial.is_face_down then dial.call("showMe") end
-				-- elseif player.has_actions then
-				-- 	if dial.is_face_down then dial.call("showMe") end
-				-- else
-				-- 	if not(dial.is_face_down) then dial.call("hideMe") end
-				-- end
-			-- end
 		end
 	end
 
@@ -1252,11 +1234,13 @@ function houseDrop(pcol, obj)
 
 	--[[TODO: document]]
 	local function placeVillageHouse(obj, node)
+		if env.test.trace then log("placeVillageHouse() "..tostring(obj)..", "..tostring(node)) end
+		if env.test.debug then log(node) end
 		table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
-		local pos = board.positionToWorld(node.center)
+		local pos = board.positionToWorld(Vector(node.center))
 		if GD.game.player_count > 2 then
-			local pos_1 = node.center - VILLAGE_OFFSET
-			local pos_2 = node.center + VILLAGE_OFFSET
+			local pos_1 = Vector(node.center) - Vector(VILLAGE_OFFSET)
+			local pos_2 = Vector(node.center) + Vector(VILLAGE_OFFSET)
 			pos = board.positionToWorld(pos_1)
 			if #node.houses == 1 then pos = board.positionToWorld(pos_2) end
 		end
@@ -1268,13 +1252,14 @@ function houseDrop(pcol, obj)
 
 	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
+		if env.test.trace then log("placeCityHouse() "..tostring(obj)..", "..tostring(node)) end
+		if env.test.debug then log(node) end
 		local color = obj.getName()
 		local center = GD.network[node.id].center
 		log(tostring(node.name).." center is "..tostring(center))
 		local index = #node.houses[color] + 1
 		log("TODO: handle more than 6 houses of a color in a city.  <-------------------")
 		local offset = Vector(C.city_house_offsets[color][index].o)
-		log("placing "..color.." house "..obj.getGUID().." with offset "..tostring(offset))
 		local pos = Vector(center) - offset
 		local rot = Vector(C.city_house_offsets[color][index].r)
 		pos.y = 1.5
@@ -1289,6 +1274,12 @@ function houseDrop(pcol, obj)
 	find first available turn action for the pending_action.key
 	Search required actions (dial selected) first, then try free action. ]]
 	local function setActionIndex(pcol, pending_action)
+		if env.test.trace then log("setActionIndex()") end
+		if env.test.debug then
+			log("pcol "..tostring(pcol))
+			log("pending action:")
+			log(pending_action)
+		end
 		local action_index = -1
 		local free_action = false
 		local player = GD.game.players[pcol]
@@ -1325,7 +1316,7 @@ function houseDrop(pcol, obj)
 	local pos = obj.getPosition()
 	pos.y = 0
 	local node_index = closestNode(pos)
-	log("nearest is id "..tostring(node_index)..", type "..GD.network[node_index].type..", name "..GD.network[node_index].name)
+	if env.test.debug then log("nearest is id "..tostring(node_index)..", type "..GD.network[node_index].type..", name "..GD.network[node_index].name) end
 	if node_index < 1 then
 		snapBack(obj)
 		return
@@ -1415,9 +1406,16 @@ function houseDrop(pcol, obj)
 					return
 				end
 			end
-			if pending_action.key == "build" and not(pending_action.free_action) then
-				player.gold = player.gold - 1
-				getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+			if pending_action.key == "build" then
+				if pending_action.free_action then
+					if GD.env.verbose then printToAll(pcol.." builds a house for free") end
+				else
+					player.gold = player.gold - 1
+					getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+					if GD.env.verbose then printToAll(pcol.." builds a house for 1 gold") end
+				end
+			else
+				if GD.env.verbose then printToAll(pcol.." moves a house") end
 			end
 			updateTurnAction(pcol, pending_action)
 			updateDialUI(pcol)
@@ -1438,16 +1436,12 @@ function palaceDrop(pcol, obj)
 	local player = GD.game.players[pcol]
 	local color = obj.getName()
 
-	log("TESTING: palaceDrop ****")
-
 	--/////// local functions ///////
-
 	--[[TODO: document]]
 	local function snapBack(obj)
 		obj.setPosition(getPlayerBoardLocation(obj))
 		obj.setRotation(getObjectFromGUID(C.player_boards[color]).getRotation())
 	end
-
 	--[[TODO: document]]
 	local function placePalace(obj, node)
 		local color = obj.getName()
@@ -1471,7 +1465,6 @@ function palaceDrop(pcol, obj)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
-
 	--//////////////////////////////////
 
 	local pos = obj.getPosition()
@@ -1487,7 +1480,6 @@ function palaceDrop(pcol, obj)
 		snapBack(obj)
 		return
 	end
-
 	local pending_action = {
 		key = "palace",
 		action_index = -1,
@@ -1502,14 +1494,12 @@ function palaceDrop(pcol, obj)
 			},
 		},
 	}
-
 	setActionIndex(pcol, pending_action)
 	if pending_action.action_index == -1 then
 		snapBack(obj)
 		if GD.env.verbose then broadcastToColor("No more palace actions", pcol) end
 		return
 	end
-
 	local cost = 12
 	if player.character_id == 6 then cost = 9 end
 	if player.gold < cost then
@@ -1517,7 +1507,6 @@ function palaceDrop(pcol, obj)
 		if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
 		return
 	end
-
 	if player.architect_location.current_node == node_index then
 		placePalace(obj, node)
 		updateCityScores(node)
@@ -1529,6 +1518,7 @@ function palaceDrop(pcol, obj)
 		updateDialUI(pcol)
 		table.insert(player.pending_actions, pending_action)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
+		if GD.env.verbose then printToAll(pcol.." places a palace for "..tostring(cost).." gold") end
 	else
 		snapBack(obj)
 		if GD.env.verbose then broadcastToColor("Architect must be present in the city", pcol) end
@@ -1805,11 +1795,12 @@ function playerDone(pcol)
 			log("*** WARN: playerDone() no actions to finalize for player "..pcol)
 		end
 		if failedActions(pcol) then
+			if GD.env.verbose then broadcastToAll(pcol.." did not complete all required actions!") end
 			for color,player in pairs(GD.game.players) do
 				if color ~= pcol then
 					player.gold = player.gold + 2
 					getObjectFromGUID(C.player_boards[color]).call("setState",{gold_coins=player.gold})
-					if GD.env.verbose then printToAll(color.." recieves +2 gold") end
+					if GD.env.verbose then printToAll(color.." recieves +2 penalty gold") end
 				end
 			end
 		elseif hasRequiredActions(pcol) then
@@ -1850,11 +1841,9 @@ function playerDone(pcol)
 			elseif action.key == "quarry" then
 				--noop
 			elseif action.key == "move" then
-				log("TODO: finalize move action <---------------")
-				--TODO: maybe a noop?
+				log("TODO: finalize move action, noop?? <---------------")
 
 			elseif action.key == "build" then
-				log("TESTING: finalize house action")
 				local obj = getObjectFromGUID(action.guid)
 				removeFromPlayerBoard(obj)
 				player.placed_houses[obj.getGUID()] = obj.getPosition()
@@ -1902,24 +1891,88 @@ function endTurn(pcol)
 	end
 end
 
---[[ ********* TODO **************
-TODO: implement and document
+--[[ ****************************
+Score the current city, check for endgame and advance to next round if not.
 ********************************]]
 function finishCurrentRound()
-	if env.test.trace then log("finishCurrentRound():") end
-	if env.test.debug then log("Finishing round "..tostring(GD.game.current_round)) end
-
-	--TODO: score current city
-	log("TODO: score current city <-----------------")
-		--calculate city score
-		--hand out payments
-		--show results dialog ???
-
-	if GD.game.current_round == 10 or GD.game.game_end_this_round then  --TODO: may move to city scoring results dialog ???
+	if env.test.trace then log("finishCurrentRound()") end
+	local city = GD.game.governor_track[7].city
+	if GD.env.verbose then printToAll("End of round "..tostring(GD.game.current_round)) end
+	scoreCity(city)
+	if GD.game.current_round == 10 or GD.game.game_end_this_round then  --TODO: may move to city scoring results dialog ack???
 		endGame()
 	else
 		beginNextRound()
 	end
+end
+
+--[[ ****************************
+Calculate gold payouts for all players with presence in the city.
+********************************]]
+function scoreCity(city)
+	if env.test.trace then log("doCityScoring(): "..tostring(city)) end
+	local scores = GD.game.city_scores[city]
+	if env.test.debug then
+		log("scores for city:")
+		log(scores)
+	end
+	if GD.env.verbose then printToAll("Scoring city: "..tostring(city)) end
+	local places = {}
+	local player_list = simpleDeepCopy(GD.game.player_order)
+	--cull players with 0 score
+	for pcol,score in pairs(scores) do
+		if score == 0 then
+			table.remove(player_list, indexOf(player_list,pcol))
+			if GD.env.verbose then printToAll(pcol.." has no presence in city, recieves 0 gold") end
+		end
+	end
+	--rank players by score in city
+	local safety = 5
+	while #player_list > 0 and safety > 0 do
+		local highest = {score=0, player=""}
+		for pcol,score in pairs(scores) do
+			if contains(player_list, pcol) then
+				if score > highest.score then
+					highest.score = score
+					highest.player = pcol
+				elseif score == highest.score then
+					if GD.game.players[pcol].character_id < GD.game.players[highest.player].character_id then
+						highest.player = pcol
+					end
+				end
+			end
+		end
+		table.insert(places, highest)
+		local index = indexOf(player_list, highest.player)
+		table.remove(player_list, index)
+		safety = safety - 1
+	end
+	if #places == 0 then
+		log("Handle case nobody scored anything")
+		if GD.env.verbose then printToAll("No players recieve gold for city scoring") end
+		return
+	end
+	--hand out money based on score ranking
+	local index = 0
+	local payouts = C.city_payouts[#GD.game.player_order]
+	for i,place in ipairs(places) do
+		local pay = payouts[i]
+		local player = GD.game.players[place.player]
+		player.gold = player.gold + pay
+		getObjectFromGUID(C.player_boards[place.player]).call("setState",{gold_coins=player.gold})
+		if GD.env.verbose then printToAll(place.player.." recieves "..tostring(pay).." gold for city scoring") end
+	end
+	--monopoly bonus
+	if #places == 1 then
+		local place = places[1]
+		local player = GD.game.players[place.player]
+		player.gold = player.gold + 5
+		getObjectFromGUID(C.player_boards[place.player]).call("setState",{gold_coins=player.gold})
+		if GD.env.verbose then printToAll(place.player.." recieves 5 gold for city monopoly bonus") end
+	end
+
+	--TODO: show a results dialog ???  or is game log enough?
+
 end
 
 --[[ *****************************
@@ -2069,7 +2122,6 @@ function playerUndo(pcol)
 		updateDialUI(pcol)
 
 	elseif action.key == "palace" then
-		log("TESTING: undo palace action <------------------")
 		local obj = getObjectFromGUID(action.guid)
 		assert(obj, "***ERROR: no object for palace on undo")
 		obj.setPosition(action.undo.snapback.pos)
@@ -2090,6 +2142,8 @@ function playerUndo(pcol)
 		player.gold = player.gold + action.cost
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 		updateDialUI(pcol)
+		updateCityScores(node)
+		updateStatusPanel()
 
 	else
 		log("*** ERROR: playerUndo() unknown action key "..tostring(action.key))
@@ -2380,6 +2434,7 @@ function updateCityScores(node)
 	assert(node.type == "city", "***ERROR: updateCityScores() node "..tostring(node.id).." is not a city")
 	for _,pcol in ipairs(GD.game.player_order) do
 		local score = #node.houses[pcol]
+		if GD.game.players[pcol].architect_location.current_node == node.id then score = score + 1 end
 		for _,palace in pairs(node.palaces) do
 			if palace.c == pcol then
 				if GD.game.players[pcol].character_id == 3 then
@@ -2480,6 +2535,7 @@ Return the snap back playerboard location for an object.
 Playerboard determined from object name(color))
 ********************************]]
 function getPlayerBoardLocation(obj)
+	if env.test.trace then log("getPlayerBoardLocation() "..tostring(obj.getGUID())) end
 	local color = obj.getName()
 	for _,d in ipairs(GD.game.players[color].pool) do
 		if d.g == obj.getGUID() then return d.p end

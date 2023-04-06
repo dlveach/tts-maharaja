@@ -7,6 +7,14 @@ C.maharaja_guid = "7fbea9"
 
 C.table_colors = {"Purple","Blue","Green","Red","Yellow",} --clockwise
 
+C.city_payouts = {
+  {}, --index placeholder, there is no 1 player
+  {10,5},
+  {11,7,3},
+  {12,9,6,3},
+  {13,10,7,4,1},
+}
+
 C.player_aids = {
   Yellow = "aaf316",
   Red = "fa494c",

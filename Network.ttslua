@@ -8,7 +8,7 @@ NETWORK = {
   { id = 4, type = "city", name = "Jaipur", paths = {1,2,5,6,7}, neighbors = {3,11,12,13,5}, },
   { id = 5, type = "village", name = "", paths = {}, neighbors = {4,6}, },
   { id = 6, type = "village", name = "", paths = {}, neighbors = {}, },
-  { id = 7, type = "city", name = "Delih", paths = {2,8,9,}, neighbors = {6,16,21}, },
+  { id = 7, type = "city", name = "Delhi", paths = {2,8,9,}, neighbors = {6,16,21}, },
   { id = 8, type = "village", name = "", paths = {}, neighbors = {1,9}, },
   { id = 9, type = "village", name = "", paths = {}, neighbors = {8,18}, },
   { id = 10, type = "village", name = "", paths = {}, neighbors = {18,11}, },
@@ -49,7 +49,7 @@ CENTERS = {
   Vector(0.056405, 0, -0.713191),  --Jaipur
   Vector( -0.316683, 0, -0.801473 ),
   Vector( -0.647095, 0, -0.743253 ),
-  Vector(-0.990048, 0, -0.711886), --Delih
+  Vector(-0.990048, 0, -0.711886), --Delhi
   Vector( 0.897177, 0, -0.358756 ),
   Vector( 0.838471, 0, -0.22045 ),
   Vector( 0.470692, 0, -0.302344 ),

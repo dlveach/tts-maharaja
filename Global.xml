@@ -30,6 +30,11 @@
     textColor="white"
     textShadow="rgba(0,0,0,1)" />
 
+  <Button class="routeHeaderButton"
+    image="Sprites/Layout/Button"
+    colors="Black|Grey|Black|Black"
+    onClick="routeSelectClick" />
+
   <Toggle class="Options"
     onValueChanged="startOptionsBtn"
     colors="blue|cyan|cyan|grey)"
@@ -227,6 +232,89 @@
     </Row>
   </TableLayout>
 </Panel>
+
+<Panel id="routes_dialog_pnl" active="false"
+  allowDragging="true"
+  returnToOriginalPositionWhenReleased="false"
+  width="206" height="400"
+  offsetXY="500 100"
+  color="rgba(0,0,0,0)" >
+  <TableLayout id="route_picker_tbl"
+    raycastTarget="true">
+    <Row preferredHeight="40" color="rgba(0,0,0,0)" >
+      <Cell>
+        <Panel image="Sprites/Layout/Title" color="#003699" >
+          <TableLayout columnWidths="80 0 70">
+            <Row preferredHeight="45">
+              <Cell padding="0 0 0 0">
+                <Text id="routes_dialog_title_player" class="large" color="Gray" text="Gray"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text class="medium" color="rgb(0.8,0.8,0.8)" text="Choose a Route"/>
+              </Cell>
+              <Cell padding="5 5 5 10">
+                <Button id="routes_dialog_cancel" onClick="routeSelectClick">
+                  <Text class="medium" text="Cancel"/>
+                </Button>
+              </Cell>
+            </Row>
+          </TableLayout>
+        </Panel>
+      </Cell>
+    </Row>
+    <Row preferredHeight="360">
+      <Cell>
+        <Panel color="#00091a">
+          <TableLayout id="routes_main_tbl" columnWidths="100 40 36 36 36 36" color="rgba(0,0,0,0)">
+            <Row id="routes_header_row" preferredHeight="30">
+              <Cell/>
+
+              <Cell><Text class="medium" color="rgb(0.8,0.8,0.8)" text="T" /></Cell>
+
+              <Cell id="routes_h_template">
+                <Button id="route_h_p_btn_template" class="routeHeaderButton">
+                  <Text class="medium" color="Grey" text="C"/>
+                </Button>
+              </Cell>
+
+              <Cell/>
+
+            </Row>
+            <Row id="route_details_row" preferredHeight="330">
+              <Cell id="route_details_cell" columnSpan="8">
+                <VerticalScrollView id="routes_scroll_view" color="#00091a"
+                  scrollbarColors="#174DAD|#174DAD|#174DAD|#174DAD" scrollbarImage="Sprites/Layout/Base"
+                  scrollbarBackgroundColor="#2C63A3">
+
+                  <TableLayout id="route_tbl" columnWidths="100 40 36 36 36" color="rgba(0,0,0,0)"
+                    autoCalculateHeight="true">
+
+                    <Row id="route_n_row_template">
+                      <Cell>
+                        <Button id="route_n_btn_template" image="Sprites/Layout/Button" onClick="routeSelectClick">
+                          <Text id="route_n_btn_txt_template" class="medium" color="rgb(1,1,0)" text="Route 1"/>
+                        </Button>
+                      </Cell>
+                      <Cell >
+                        <Text id="route_n_total_cost_template" class="medium" color="rgb(0.8,0.8,0.8)" text="0"/>
+                      </Cell>
+                      <Cell id="route_n_pcol_cost_template">
+                        <Text id="route_n_pcol_cost_txt_template" class="medium" text="0"/>
+                      </Cell>
+
+                    </Row>
+
+                  </TableLayout>
+                </VerticalScrollView>
+              </Cell>
+            </Row>
+          </TableLayout>
+        </Panel>
+      </Cell>
+    </Row>
+  </TableLayout>
+</Panel>
+
 
 </XmlLayout>
 

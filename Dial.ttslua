@@ -386,16 +386,21 @@ Hide/Show actions UI panel active based on state.
 ********************************]]
 function flipMe()
   if env.test.trace then log(gid..":flipMe()") end
-  if not(GD.state.flipped) then
-    --turn display off before flipping to avoid weird UI movement
-    self.UI.setAttribute("player_actions_panel","active",false)
-  end
+  -- if not(GD.state.flipped) then
+  --   --turn display off before flipping to avoid weird UI movement
+  --   self.UI.setAttribute("player_actions_panel","active",false)
+  -- end
   GD.state.flipped = not(GD.state.flipped)
   self.setLock(false)
   self.flip()
   Wait.condition(function()
     self.setLock(true)
-    self.UI.setAttribute("player_actions_panel","active",not(GD.state.flipped))
+    if GD.state.flipped then
+      disableActionUI()
+    else
+      enableActionUI()
+    end
+    -- self.UI.setAttribute("player_actions_panel","active",not(GD.state.flipped))
   end, function() return self.resting end, 3)
 end
 

@@ -23,16 +23,29 @@ TTS mod for Maharaja
 
 --TODO: documentation
 
-	--TODO: (WIP) implement route selection, player pending action and undo for architect move
-	--TODO: implement route sorting on opponent selection (button in header of dialog)
+*** MVP FEATURES ***
+
 	--TODO: implement extra action stuffs (BIG)
+	--TODO: TEST move action
+	--TODO: Handle more than 6 houses of a color in a city
+
+*** OTHER STUFF ***
+
+	--TODO: implement route sorting on opponent selection (button in header of dialog)
 	--TODO: possibly need to dedupe and refactor code for updating/setting player character bonuses.  Got very messy after`
 					adding character exchange action.  Probably lots of bugs.
 	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Takes too long to load.
+	--TODO: add verbose game prints for undo actions
+	--TODO: add player prefs dialog (so far, only auto_select_zero_route is an possible option)
+					-- Auto select least expensive route if unique could be another option
+
+*** BUGs ***
 
 	--BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too.
-	--BUG routes are all nil and dialog blank when cost of a route is zero
 	--BUG (maybe?) not sure if character_id are updated to break ties when swap is final action before scoring, TEST all scoring and tie breaker
+	--BUG palaces are not locked after placing
+	--BUG if 8 cities in route, last one is cut off in dialog button text
+	--BUG select actions: alternating between palace/house and palace actions results in extra build house turn actions in dialog
 
 ==========================================================================================]]
 
@@ -561,6 +574,67 @@ Handle player click on route selector dialog
 ********************************]]
 function routeSelectClick(player, btn, id)
 	if env.test.trace then log("statusClick() "..player.color..", id: "..tostring(id)) end
+	if player.color ~= GD.game.current_player_color then return end
+	local plr = GD.game.players[player.color]
+
+	if id == "routes_dialog_cancel" then
+		--cancel pending action (basically undo the pending action and clear it)
+		assert(#plr.pending_actions > 0, "***ERROR: No "..player.color.." pending actions during route selection")
+		local pending = plr.pending_actions[#plr.pending_actions]
+		assert(pending.key == "architect","***ERROR: Incorrect "..player.color.." pending action key during route selection")
+		log("pending action:");log(pending)
+		local return_pos = pending.undo.snapback.pos
+		local old_node = pending.undo.snapback.old_node
+		local pawn = getObjectFromGUID(pending.guid)
+		pawn.setLock(false)
+		pawn.setPosition(return_pos)
+		plr.architect_location.current_node = old_node
+		plr.architect_location.snap_pos = return_pos
+		updateCityScores()
+		updateStatusPanel()
+		table.remove(plr.pending_actions, #plr.pending_actions)
+		if #plr.pending_actions > 0 then
+			getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true, undo=true})
+		else
+			getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true, undo=false})
+		end
+
+	elseif Split(id,'_')[2] == "hdr" then
+
+		log("TODO: sort routes by opp")
+		return
+
+	elseif Split(id,'_')[1] == "route" then
+		local index = tonumber(Split(id,'_')[2])
+		log("selected route index is "..tostring(index))
+		local route = plr.route_table[index]
+		log("selected route is "..route.cities)
+		assert(#plr.pending_actions > 0, "***ERROR: No "..player.color.." pending actions during route selection")
+		local pending = plr.pending_actions[#plr.pending_actions]
+		assert(pending.key == "architect","***ERROR: Incorrect "..player.color.." pending action key during route selection")
+		log("pending action:");log(pending)
+		if route.total_cost > plr.gold then
+			--shouldn't happen if routes are being pruned but handle just in case
+			if GD.env.verbose then broadcastToColor("Not enough gold", player.color) end
+			return
+		end
+		pending.route_cost = route.total_cost
+		if route.total_cost > 0 then
+			plr.gold = plr.gold - route.total_cost
+			for color,cost in pairs(route.costs) do
+				local opp = GD.game.players[color]
+				opp.gold = opp.gold + cost
+				getObjectFromGUID(C.player_boards[color]).call("setState",{gold_coins=opp.gold})
+				if GD.env.verbose then printToAll(player.color.." pays "..color.." "..tostring(cost).." gold") end
+			end
+			pending.costs = simpleDeepCopy(route.costs)
+		end
+		getObjectFromGUID(C.player_boards[player.color]).call("setState",{gold_coins=plr.gold})
+		getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true, undo=true})
+		if GD.env.verbose then printToAll(player.color.." moves Architect for "..tostring(route.total_cost).." gold") end
+		getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true, undo=true})
+	end
+	UI_setAttribute("routes_dialog_pnl","active",false)
 end
 
 --[[/////////////// Game Setup /////////////////////]]
@@ -722,7 +796,7 @@ function setupGlobalUI()
 			local cell = simpleDeepCopy(header_cell)
 			cell.attributes.id = "routes_h_"..pcol
 			local btn = cell.children[1]
-			btn.attributes.id = "route_h_"..pcol.."_btn"
+			btn.attributes.id = "route_hdr_"..pcol.."_btn"
 			local txt = btn.children[1]
 			txt.attributes.color = pcol
 			txt.attributes.text = initial
@@ -791,11 +865,14 @@ function setupPlayers()
 			dest_node = -1,
 			snap_pos = getObjectFromGUID(C.player_pawns[pcol]).getPosition(),
 		}
-		player.gold = 15
+		player.gold = 15  --TODO: extra gold if auction character selection order?
 		player.extra_actions = 0
 		player.turn_actions = {}
+		player.pending_actions = {}
 		player.actions_set = false
 		player.pointers = {}
+		player.prefs = {}
+		player.prefs.auto_select_zero_route = false
 		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
 		--initialize player pool
 		local player_board = getObjectFromGUID(C.player_boards[pcol])
@@ -1473,11 +1550,19 @@ function houseDrop(pcol, obj)
 					return
 				else
 					placeVillageHouse(obj,node)
+					if pending_action.key == "move" then
+						updateCityScores()
+						updateStatusPanel()
+					end
 				end
 			else
 				if player.architect_location.current_node == node_index then
 					placeCityHouse(obj, node)
-					updateCityScores(node)
+					if pending_action.key == "move" then
+						updateCityScores()
+					else
+						updateCityScores(node)
+					end
 					updateStatusPanel()
 				else
 					snapBack(obj)
@@ -1634,11 +1719,21 @@ function architectDrop(pcol, obj)
 		snapback(obj)
 		return
 	end
+	--check if latest pending action is an uncompleted architect, disallow if so
+	if #player.pending_actions > 0 then
+		local pending = player.pending_actions[#player.pending_actions]
+		if pending.key == "architect" and pending.route_cost < 0 then
+			if GD.env.verbose then broadcastToColor("Complete pending architect move first", pcol) end
+			snapback(obj)
+			return
+		end
+	end
 	--position pawn on city location
 	local lpos = Vector(node.center) - Vector(C.city_pawn_offsets[pcol])
 	obj.setPosition(board.positionToWorld(lpos))
-	--
+	--update costs of the paths for this player color
 	updatePathTable(pcol)
+	--build the route table
 	local start_id = player.architect_location.current_node
 	local dest_id = node_index
 	local tmp = buildRouteTable(start_id, dest_id)
@@ -1648,100 +1743,126 @@ function architectDrop(pcol, obj)
 		return
 	end
 	local routes = {}
-
-	local function calculateRouteTable()
-		for i,e in ipairs(tmp) do  --calculate route costs
-			local route = {}
-			route.total_cost = 0
-			route.length = 0
-			local cities = ""
-			for _,c in ipairs(e.seen) do
-				cities = cities .." "..tostring(c)
-			end
-			route.cities = cities
-			local costs = {}
-			for _,p in ipairs(e.paths) do
-				route.length = route.length + 1
-				for color,cost in pairs(GD.path_table[p].cost) do
-					route.total_cost = route.total_cost + cost
-					if costs[color] ~= nil then
-						costs[color] = costs[color] + cost
-					else
-						costs[color] = cost
-					end
-				end
-			end
-			route.costs = simpleDeepCopy(costs)
-			table.insert(routes,simpleDeepCopy(route))
+	for i,e in ipairs(tmp) do  --calculate route costs
+		local route = {}
+		route.total_cost = 0
+		route.length = 0
+		local cities = ""
+		for _,c in ipairs(e.seen) do
+			cities = cities .." "..tostring(c)
 		end
-		log("routes discovered:")
-		log(routes)
-		-- prune too expensive (total cost > player gold), if all are too expensive then snapback & warn
-		for i,route in ipairs(routes) do  --prune routes
-			if route.total_cost > player.gold then routes[i]=nil end
-		end
-		if #routes == 0 then
-			log("All routes from node "..tostring(start_id).." to node "..dest_id.." cost more than player "..pcol.." gold")
-			if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
-			snapback(obj)
-			return
-		end
-		-- keep just one (the shortest) free route
-		local shortest = {id=-1,len=99}
-		for i,route in ipairs(routes) do
-			if route.total_cost == 0 then
-				if route.length < shortest.len then
-					if routes[shortest.id] then routes[shortest.id] = nil end
-					shortest.id = i
-					shortest.len = route.length
+		route.cities = cities
+		local costs = {}
+		for _,p in ipairs(e.paths) do
+			route.length = route.length + 1
+			for color,cost in pairs(GD.path_table[p].cost) do
+				route.total_cost = route.total_cost + cost
+				if costs[color] ~= nil then
+					costs[color] = costs[color] + cost
 				else
-					routes[i]=nil
+					costs[color] = cost
 				end
 			end
 		end
-		-- TODO: remove duplicates (where all color costs are same, len or cities does not matter)
-		for i,route in ipairs(routes) do
-			local costs = route.costs
+		route.costs = simpleDeepCopy(costs)
+		table.insert(routes,simpleDeepCopy(route))
+	end
+	-- if env.test.debug then
+	-- 	log("routes discovered:")
+	-- 	log(routes)
+	-- end
+	-- prune too expensive (total cost > player gold), if all are too expensive then snapback & warn
+	local tmp = {}
+	for i,route in ipairs(routes) do
+		if route.total_cost <= player.gold then
+			table.insert(tmp, route)
+		else
+			if env.test.debug then log("Route too expensive "..tostring(i)..": "..route.cities) end
+		end
+	end
+	routes = tmp
+	if #routes == 0 then
+		if env.test.debug then log("All routes from node "..tostring(start_id).." to node "..dest_id.." cost more than player "..pcol.." gold") end
+		if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
+		snapback(obj)
+		return
+	end
+	-- keep just one (the shortest) free route
+	local shortest
+	local zero_route = false
+	for i,route in ipairs(routes) do
+		if route.total_cost == 0 then
+			if shortest == nil then
+				zero_route = true
+				shortest = {id=i, length=route.length}
+			elseif route.length < shortest.length then
+				if routes[shortest.id] then routes[shortest.id].total_cost = -1 end
+				shortest.id = i
+				shortest.len = route.length
+			else
+				route.total_cost = -1
+				if env.test.debug then log("removing duplicate 0 cost route "..route.cities) end
+			end
+		end
+	end
+	--remove duplicates (where all color costs are same, route length does not matter)
+	for i,route in ipairs(routes) do
+		if route.total_cost > 0 then
 			for j,r in ipairs(routes) do
-				if r then
+				if r.total_cost > 0 then
 					local same = true
-					for color,cost in pairs(costs) do
+					for color,cost in pairs(route.costs) do
 						if not(r[color]) or r[color].cost ~= cost then same = false; break end
 					end
-					if same then routes[j] = nil end
+					if same then
+						routes[j].total_cost = -1
+						if env.test.debug then log("removing duplicate cost route "..route.cities) end
+					end
 				end
 			end
 		end
-
-		log("routes after pruning:")
-		log(routes)
-
-		--condense routes table after all pruning (remove nil entries)
-		local temp = {}
-		for _,route in pairs(routes) do
-			if route then table.insert(temp,1,route) end
-		end
-		routes = temp
-
-		log("routes after condensing:")
-		log(routes)
 	end
-
-	calculateRouteTable()
-
+	--now remove all routes that have been pruned (total_cost == -1)
+	local temp = {}
+	for i,route in ipairs(routes) do
+		if route.total_cost >= 0 then table.insert(temp, route) end
+	end
+	routes = temp
+	--Setup the architect move action
+	local pending_action = {
+		key = "architect",
+		player_color = pcol,
+		guid = obj.getGUID(),
+		route_cost = -1,
+		undo = {
+			node_index = node_index,
+			guid = obj.getGUID(),
+			snapback = {
+				pos = player.architect_location.snap_pos,
+				old_node = player.architect_location.current_node,
+			},
+		},
+	}
 	player.route_table = routes
 	sortRoutes(pcol)
-
 	player.architect_location.current_node = node_index
 	player.architect_location.snap_pos = obj.getPosition()
-
-	--TODO: set up pending action for this node and add to player's pending actions
-
-	updateCityScores(node)
+	updateCityScores()
 	updateStatusPanel()
-
-	updateRouteDialog(pcol)
-
+	local auto_select_free_route = false
+	if player.character_id == 4 then auto_select_free_route = true
+	elseif zero_route and player.prefs.auto_select_zero_route then auto_select_free_route = true end
+	--display route dialog if approprite or just auto select the free move
+	if auto_select_free_route then
+		if GD.env.verbose then printToAll(pcol.." pays 0 gold to move Architect") end
+		pending_action.route_cost = 0
+		table.insert(player.pending_actions, pending_action)
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
+	else
+		table.insert(player.pending_actions, pending_action)
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
+		updateRouteDialog(pcol)
+	end
 end
 
 --[[ *****************************
@@ -1769,10 +1890,13 @@ function sortRoutes(pcol, opp)
 					found = true
 					break
 				elseif route.total_cost == e.total_cost then
-					--TODO: check opp
-					table.insert(sorted, j, route)
-					found = true
-					break
+					if opp == "none" then
+						table.insert(sorted, j, route)
+						found = true
+						break
+					else
+						--TODO: check opp
+					end
 				end
 			end
 			if not(found) then table.insert(sorted, route) end
@@ -1800,8 +1924,6 @@ function updateRouteDialog(pcol)
 	end
 	--fill rows from player's route table
 	for i,route in ipairs(routes) do
-		log("setting picker row "..tostring(i))
-		log(route)
 		local r = tostring(i)
 		UI_setAttribute("route_"..r.."_btn_txt","text",route.cities)
 		for _,color in ipairs(GD.game.player_order) do
@@ -2268,8 +2390,6 @@ function playerUndo(pcol)
 			else
 				log("***ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))
 			end
-			updateCityScores(node)
-			updateStatusPanel()
 		else
 			if node.houses[1] and node.houses[1].g == action.guid then
 				node.houses[1] = nil
@@ -2280,9 +2400,29 @@ function playerUndo(pcol)
 				return
 			end
 		end
+		updateCityScores()
+		updateStatusPanel()
 		resetAction(pcol, action)
 		updateDialUI(pcol)
-
+	elseif action.key == "architect" then
+		local return_pos = action.undo.snapback.pos
+		local old_node = action.undo.snapback.old_node
+		local pawn = getObjectFromGUID(action.guid)
+		pawn.setLock(false)
+		pawn.setPosition(return_pos)
+		player.architect_location.current_node = old_node
+		player.architect_location.snap_pos = return_pos
+		updateCityScores()
+		updateStatusPanel()
+		if action.route_cost > 0 then
+			for color,cost in pairs(action.costs) do
+				local opp = GD.game.players[color]
+				opp.gold = opp.gold - cost
+				getObjectFromGUID(C.player_boards[color]).call("setState",{gold_coins=opp.gold})
+			end
+			player.gold = player.gold + action.route_cost
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+		end
 	elseif action.key == "palace" then
 		local obj = getObjectFromGUID(action.guid)
 		assert(obj, "***ERROR: no object for palace on undo")
@@ -2306,7 +2446,6 @@ function playerUndo(pcol)
 		updateDialUI(pcol)
 		updateCityScores(node)
 		updateStatusPanel()
-
 	else
 		log("*** ERROR: playerUndo() unknown action key "..tostring(action.key))
 		return
@@ -2591,25 +2730,55 @@ end
 For a given network node (that is a city) update the
 City score for each player
 ********************************]]
+-- function updateCityScores(node)
+-- 	if env.test.trace then log("updateCityScores() "..tostring(node.name)..", "..tostring(node.id)) end
+-- 	assert(node.type == "city", "***ERROR: updateCityScores() node "..tostring(node.id).." is not a city")
+-- 	for _,pcol in ipairs(GD.game.player_order) do
+-- 		local score = #node.houses[pcol]
+-- 		if GD.game.players[pcol].architect_location.current_node == node.id then score = score + 1 end
+-- 		for _,palace in pairs(node.palaces) do
+-- 			if palace.c == pcol then
+-- 				if GD.game.players[pcol].character_id == 3 then
+-- 					score = score + 2
+-- 				else
+-- 					score = score + 1
+-- 				end
+-- 			end
+-- 		end
+-- 		if node.center_palace then
+-- 			if node.center_palace.c == pcol then score = score + 3 end
+-- 		end
+-- 		GD.game.city_scores[node.name][pcol] = score
+-- 	end
+-- end
 function updateCityScores(node)
-	if env.test.trace then log("updateCityScores() "..tostring(node.name)..", "..tostring(node.id)) end
-	assert(node.type == "city", "***ERROR: updateCityScores() node "..tostring(node.id).." is not a city")
-	for _,pcol in ipairs(GD.game.player_order) do
-		local score = #node.houses[pcol]
-		if GD.game.players[pcol].architect_location.current_node == node.id then score = score + 1 end
-		for _,palace in pairs(node.palaces) do
-			if palace.c == pcol then
-				if GD.game.players[pcol].character_id == 3 then
-					score = score + 2
-				else
-					score = score + 1
+	if env.test.trace then log("updateCityScores()") end
+	local function updateScores(node)
+		assert(node.type == "city", "***ERROR: updateCityScores() node "..tostring(node.id).." is not a city")
+		for _,pcol in ipairs(GD.game.player_order) do
+			local score = #node.houses[pcol]
+			if GD.game.players[pcol].architect_location.current_node == node.id then score = score + 1 end
+			for _,palace in pairs(node.palaces) do
+				if palace.c == pcol then
+					if GD.game.players[pcol].character_id == 3 then
+						score = score + 2
+					else
+						score = score + 1
+					end
 				end
 			end
+			if node.center_palace then
+				if node.center_palace.c == pcol then score = score + 3 end
+			end
+			GD.game.city_scores[node.name][pcol] = score
 		end
-		if node.center_palace then
-			if node.center_palace.c == pcol then score = score + 3 end
+	end
+	if node then
+		updateScores(node)
+	else
+		for name,city in pairs(C.cities) do
+			updateScores(GD.network[city.node])
 		end
-		GD.game.city_scores[node.name][pcol] = score
 	end
 end
 

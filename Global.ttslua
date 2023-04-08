@@ -25,7 +25,7 @@ TTS mod for Maharaja
 
 *** MVP FEATURES ***
 
-	--TODO: implement extra action stuffs (BIG)
+	--TODO: implement extra action stuffs
 	--TODO: TEST move action
 	--TODO: Handle more than 6 houses of a color in a city
 
@@ -33,7 +33,6 @@ TTS mod for Maharaja
 
 	--TODO: implement end game
 	--TODO: implement extra action
-	--TODO: highlight city name in status display where Maharaja is currently.
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
 	--TODO: TEST: possibly need to dedupe and refactor code for updating/setting player character bonuses.  Got very messy after`
 					adding character exchange action.  Probably lots of bugs.
@@ -48,7 +47,10 @@ TTS mod for Maharaja
 	--BUG (maybe?) not sure if character_id are updated to break ties when swap is final action before scoring, TEST all scoring and tie breaker
 	--BUG palaces are not locked after placing
 	--BUG if 8 cities in route, last one is cut off in dialog button text
-	--BUG select actions: alternating between palace/house and palace actions results in extra build house turn actions in dialog
+	--BUG FIXED? TESTING: see "nil bug" tags
+		--BUG: select actions: alternating between palace/house and palace actions results in extra build house turn actions in dialog
+		--BUG: related?  turn action index can get gaps in it, i.e. 1,2,4.  Probably setting entry to nil somewhere vs. using table.remove
+						breaks ipairs() indexer causing trouble in mutliple places (updateDialUI(), )
 	--BUG game breaks (im sure) if player picks up multiple houses, palaces etc.  Handle in onDrop or in onPickup?
 
 ==========================================================================================]]
@@ -345,7 +347,9 @@ Handler for button clicks on player board
 ********************************]]
 function playerBoardClick(player, btn, id)
 	if env.test.trace then log("playerBoardClick(): "..player.color..", id = "..id) end
-	local action = Split(id,'_')[1]
+	local board_color = Split(id,'_')[1]
+	if player.color ~= board_color then return end
+	local action = Split(id,'_')[2]
 	if action == "done" then
 		playerDone(player.color)
 	elseif action == "undo" then
@@ -743,7 +747,7 @@ function setupGlobalUI()
 	local city_row = getXmlElement("status_row_template",status_table)
 	local temp_row = simpleDeepCopy(city_row)
 	local player_cell = getXmlElement("status_p_template",temp_row)
-	status_table.children[2] = nil --wipe out the template so it can be replaced
+	status_table.children[2] = nil --this is ok, table.insert below will handle the nil entry
 	for i,gov in ipairs(GD.game.governor_track) do
 		local row = simpleDeepCopy(temp_row)
 		local ref = gov.UI_row
@@ -874,6 +878,7 @@ function setupPlayers()
 		player.pointers = {}
 		player.prefs = {}
 		player.prefs.auto_select_zero_route = false
+		player.prefs.auto_select_unique_cheapest_route = false
 		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
 		--initialize player pool
 		local player_board = getObjectFromGUID(C.player_boards[pcol])
@@ -886,6 +891,16 @@ function setupPlayers()
 		for name,_ in pairs(C.cities) do
 			GD.game.city_scores[name][pcol] = 0
 		end
+		--set playerboard button ids
+		local player_board = getObjectFromGUID(C.player_boards[pcol])
+		local xml = player_board.UI.getXmlTable()
+		local btn = getXmlElement("done_btn",xml)
+		btn.attributes.id = pcol.."_done_btn"
+		btn = getXmlElement("extraAction_btn",xml)
+		btn.attributes.id = pcol.."_extraAction_btn"
+		btn = getXmlElement("undo_btn",xml)
+		btn.attributes.id = pcol.."_undo_btn"
+		player_board.UI.setXmlTable(xml)
 	end
 	UI_setAttribute("status_info","visibility",GD.game.status_visibility)
 	GD.game.current_player = math.random(#GD.game.player_order)
@@ -1859,9 +1874,16 @@ function architectDrop(pcol, obj)
 		table.insert(player.pending_actions, pending_action)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
 	else
-		table.insert(player.pending_actions, pending_action)
-		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
-		updateRouteDialog(pcol)
+		if not(zero_route) and routes[1].total_cost ~= routes[2].total_cost and player.prefs.auto_select_unique_cheapest_route then
+			pending_action.route_cost = routes[1].total_cost
+			pending_action.costs = simpleDeepCopy(routes[1].costs)
+			table.insert(player.pending_actions, pending_action)
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
+		else
+			table.insert(player.pending_actions, pending_action)
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
+			updateRouteDialog(pcol)
+		end
 	end
 end
 
@@ -2035,7 +2057,6 @@ function playerDone(pcol)
 					UI_setAttribute("replace_character_pnl","active",true)
 				end
 			elseif action.key == "palace" then
-				log("TESTING: finalize palace action <---------------")
 				table.insert(player.placed_palaces, action.guid)
 				if #player.placed_palaces == 7 then
 					if not(GD.game.game_end_this_round) then
@@ -2053,6 +2074,10 @@ function playerDone(pcol)
 				local obj = getObjectFromGUID(action.guid)
 				removeFromPlayerBoard(obj)
 				player.placed_houses[obj.getGUID()] = obj.getPosition()
+
+			elseif action.key == "architect" then
+				log("TODO: finalize architect action, noop?? <---------------")
+
 			else
 				log("*** ERROR: playerDone() unknown action key "..tostring(action.key))
 				return
@@ -2325,6 +2350,7 @@ function moveMaharaja()
 	local board = getObjectFromGUID(C.board_guid)
 	local track = GD.game.governor_track
 	local city = track[1].city
+	GD.game.maharaja_node = track[1].node
 	local pos = board.positionToWorld(C.cities[city].maharaja_pos)
 	local maha = getObjectFromGUID(C.maharaja_guid)
 	maha.setLock(false)
@@ -2340,7 +2366,6 @@ function moveMaharaja()
 	end
 	track[7] = temp
 	updateGovernorTrack()
-	GD.game.maharaja_node = track[1].node
 end
 
 --[[ ********* TODO **************
@@ -2869,7 +2894,7 @@ TODO: actually update and update UI
 function updateTurnOrder()
 	if env.test.trace then log("updateTurnOrder()") end
 	--sort player order by character ID
-	local new_order = nil
+	local new_order
 	for pcol,pdata in pairs(GD.game.players) do
 		if new_order == nil then
 			new_order = {pcol}
@@ -2952,7 +2977,7 @@ function closestNode(pos)
 	assert(pos, "***ERROR: closestNode() missing pos")
 	local board = getObjectFromGUID(C.board_guid)
 	local nearest_node = -1
-	local shortest_dist = nil
+	local shortest_dist
 	for i,node in ipairs(GD.network) do
 		local dist = Vector.sqrDistance(pos, board.positionToWorld(node.center))
 		if shortest_dist then
@@ -3014,8 +3039,6 @@ function updateDialUI(pcol)
 	end
 	local row = 0
 	for _,action in ipairs(player.turn_actions) do
-		log("updating dial UI with dial_action: "..tostring(action.id))   --TODO: LOGGING
-		log(action)
 		if action.free then
 			dial.UI.setAttribute("action_text_7", "text", action.label)
 			dial.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
@@ -3078,12 +3101,20 @@ function addDialAction(params)
 	assert(pointer_id, "***ERROR addDialAction(): missing pointer_id param")
 	local player = GD.game.players[pcol]
 
-	--TODO: TESTING flatten player actions
-
 	--remove any previous entries for this pointer id
-	for i,a in ipairs(player.turn_actions) do
-		if a.pointer_id == pointer_id then player.turn_actions[i] = nil end
+	-- for i,a in ipairs(player.turn_actions) do
+	-- 	if a.pointer_id == pointer_id then player.turn_actions[i] = nil end      --TODO: nil bug
+	-- end
+	--BUG FIX nil bug
+	local temp = simpleDeepCopy(player.turn_actions)
+	player.turn_actions = {}
+	for i,a in ipairs(temp) do
+		if a.pointer_id ~= pointer_id then
+			a.index = #player.turn_actions + 1
+			table.insert(player.turn_actions, a)
+		end
 	end
+
 	--add new actions for this dial index
 	for _,a in ipairs(C.dial_actions[dial_index].actions) do
 		local action = simpleDeepCopy(a)

@@ -196,6 +196,8 @@
 </Panel>
 
 <Panel id="statusPanel" active="false"
+  allowDragging="true"
+  returnToOriginalPositionWhenReleased="false"
   width="320" height="370"
   offsetXY="-750 350"
   color="rgba(0,0,0,0)" >

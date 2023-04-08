@@ -31,13 +31,16 @@ TTS mod for Maharaja
 
 *** OTHER STUFF ***
 
+	--TODO: implement end game
+	--TODO: implement extra action
+	--TODO: highlight city name in status display where Maharaja is currently.
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
-	--TODO: possibly need to dedupe and refactor code for updating/setting player character bonuses.  Got very messy after`
+	--TODO: TEST: possibly need to dedupe and refactor code for updating/setting player character bonuses.  Got very messy after`
 					adding character exchange action.  Probably lots of bugs.
 	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Takes too long to load.
 	--TODO: add verbose game prints for undo actions
-	--TODO: add player prefs dialog (so far, only auto_select_zero_route is an possible option)
-					-- Auto select least expensive route if unique could be another option
+	--TODO: add player prefs dialog (so far, auto_select_zero_route is an possible option)
+					-- auto_select_unique_cheapest_route could be another option
 
 *** BUGs ***
 
@@ -46,6 +49,7 @@ TTS mod for Maharaja
 	--BUG palaces are not locked after placing
 	--BUG if 8 cities in route, last one is cut off in dialog button text
 	--BUG select actions: alternating between palace/house and palace actions results in extra build house turn actions in dialog
+	--BUG game breaks (im sure) if player picks up multiple houses, palaces etc.  Handle in onDrop or in onPickup?
 
 ==========================================================================================]]
 
@@ -107,6 +111,7 @@ function onLoad(saved_data)
 		GD.game.stage = "setup"
 		GD.game.round = 1
 		GD.game.city_scores = {}
+		GD.game.maharaja_node = 8
 		for name,_ in pairs(C.cities) do
 			GD.game.city_scores[name] = {}
 		end
@@ -168,7 +173,6 @@ function restoreGameState()
 		log("TESTING: Restoring game state in game play stages <-------------")
 		setupGlobalUI()
 		updateGovernorTrack()
-		updateStatusPanel()
 		for pcol,player in pairs(GD.game.players) do
 			updateDialUI(pcol)
 		end
@@ -330,8 +334,7 @@ function governorClick(player, btn, id)
 		end
 		track[new_index] = temp
 		updateGovernorTrack()
-		updateStatusPanel()
-		governorButtons(false)
+		setGovernorButtons(false)
 		updateDialUI(player.color)
 		getObjectFromGUID(C.player_boards[player.color]).call("setState",{undo=true})
 	end
@@ -569,7 +572,7 @@ function replaceCharDialogBtn(player, btn, id)
 	end
 end
 
---[[ ********** TODO: ***********
+--[[ ********** TODO: sort by opp ***********
 Handle player click on route selector dialog
 ********************************]]
 function routeSelectClick(player, btn, id)
@@ -591,7 +594,6 @@ function routeSelectClick(player, btn, id)
 		plr.architect_location.current_node = old_node
 		plr.architect_location.snap_pos = return_pos
 		updateCityScores()
-		updateStatusPanel()
 		table.remove(plr.pending_actions, #plr.pending_actions)
 		if #plr.pending_actions > 0 then
 			getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true, undo=true})
@@ -659,17 +661,16 @@ function setupGovernorTrack()
 		table.remove(temp,i)
 		ref = ref - 1
 	end
-	updateGovernorTrack()
+	updateGovernorTrack(false)
 end
 
 --[[ *****************************
 Update the board UI with Governor images on the track.
 Assumes governor track data has been initialized.
 ********************************]]
-function updateGovernorTrack()
+function updateGovernorTrack(update_status)
 	if env.test.trace then log("updateGovernorTrack()") end
-	-- local board = getObjectFromGUID(C.board_guid)
-	--fill base track images
+	local update_status = update_status or true
 	for row=1,17 do
 		if row > 7 then
 			board_UI_setAttribute("gov_"..tostring(row),"image","Gray-"..(row-7))
@@ -677,10 +678,10 @@ function updateGovernorTrack()
 			board_UI_setAttribute("gov_"..tostring(row),"image","Gray")
 		end
 	end
-	--set the governor images per gov track data table, overwriting base image set above
 	for i,entry in ipairs(GD.game.governor_track) do
 		board_UI_setAttribute("gov_"..tostring(entry.track_row),"image",entry.city)
 	end
+	if update_status then updateStatusPanel() end
 end
 
 --[[ *****************************
@@ -1552,7 +1553,6 @@ function houseDrop(pcol, obj)
 					placeVillageHouse(obj,node)
 					if pending_action.key == "move" then
 						updateCityScores()
-						updateStatusPanel()
 					end
 				end
 			else
@@ -1563,7 +1563,6 @@ function houseDrop(pcol, obj)
 					else
 						updateCityScores(node)
 					end
-					updateStatusPanel()
 				else
 					snapBack(obj)
 					if GD.env.verbose then broadcastToColor("Architect must be present in the city", pcol) end
@@ -1674,7 +1673,6 @@ function palaceDrop(pcol, obj)
 	if player.architect_location.current_node == node_index then
 		placePalace(obj, node)
 		updateCityScores(node)
-		updateStatusPanel()
 		player.gold = player.gold - cost
 		pending_action.cost = cost
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
@@ -1689,8 +1687,11 @@ function palaceDrop(pcol, obj)
 	end
 end
 
---[[ ********* TODO: *************
+--[[ ****************************
 Process a dropped architect.
+Place in player city location, snap back if not city.
+Calculate route(s) from origin, display chooser if needed.
+Setup pending architect move action.
 ********************************]]
 function architectDrop(pcol, obj)
 	if env.test.trace then log("architectDrop(): "..pcol..", "..tostring(obj)) end
@@ -1848,7 +1849,6 @@ function architectDrop(pcol, obj)
 	player.architect_location.current_node = node_index
 	player.architect_location.snap_pos = obj.getPosition()
 	updateCityScores()
-	updateStatusPanel()
 	local auto_select_free_route = false
 	if player.character_id == 4 then auto_select_free_route = true
 	elseif zero_route and player.prefs.auto_select_zero_route then auto_select_free_route = true end
@@ -1863,82 +1863,6 @@ function architectDrop(pcol, obj)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
 		updateRouteDialog(pcol)
 	end
-end
-
---[[ *****************************
-Bubble sort the route table.
-Primary sort index is total cost for route
-TODO: use opp cost as secondary sort index
-********************************]]
-function sortRoutes(pcol, opp)
-	if env.test.trace then log("sortRoutes() "..tostring(pcol)) end
-	assert(pcol, "***ERROR: missing player color")
-	local opp = opp or "none"
-	if env.test.debug then log("using opponent "..opp.." for secondary index") end
-	local player = GD.game.players[pcol]
-	local routes = player.route_table
-	assert(routes, "***ERROR: no route table for player "..pcol)
-	local sorted = {}
-	for i,route in ipairs(routes) do
-		if #sorted == 0 then
-			table.insert(sorted, route)
-		else
-			local found = false
-			for j,e in ipairs(sorted) do
-				if route.total_cost < e.total_cost then
-					table.insert(sorted, j, route)
-					found = true
-					break
-				elseif route.total_cost == e.total_cost then
-					if opp == "none" then
-						table.insert(sorted, j, route)
-						found = true
-						break
-					else
-						--TODO: check opp
-					end
-				end
-			end
-			if not(found) then table.insert(sorted, route) end
-		end
-	end
-	player.route_table = sorted
-end
-
---[[ *****************************
-Update the route dialog with latest route table for player
-********************************]]
-function updateRouteDialog(pcol)
-	if env.test.trace then log("updateRouteDialog() "..tostring(pcol)) end
-	assert(pcol, "***ERROR: missing player color")
-	local player = GD.game.players[pcol]
-	local routes = player.route_table
-	assert(routes, "***ERROR: no route table for player "..pcol)
-	--clear all rows first and deactivate
-	for i=1,GD.env.max_route_rows do
-		UI_setAttribute("route_"..tostring(i).."_row","active",false)
-		UI_setAttribute("route_"..tostring(i).."_total_cost","text","0")
-		for _,color in ipairs(GD.game.player_order) do
-			UI_setAttribute("route_"..tostring(i).."_"..color.."_cost_txt","text","")
-		end
-	end
-	--fill rows from player's route table
-	for i,route in ipairs(routes) do
-		local r = tostring(i)
-		UI_setAttribute("route_"..r.."_btn_txt","text",route.cities)
-		for _,color in ipairs(GD.game.player_order) do
-			if route.costs[color] then
-				UI_setAttribute("route_"..r.."_"..color.."_cost_txt","text",tostring(route.costs[color]))
-			else
-				UI_setAttribute("route_"..r.."_"..color.."_cost_txt","text","")
-			end
-		end
-		UI_setAttribute("route_"..r.."_total_cost","text",tostring(route.total_cost))
-		UI_setAttribute("route_"..r.."_row","active",true)
-	end
-	UI_setAttribute("routes_dialog_title_player","text",pcol)
-	UI_setAttribute("routes_dialog_title_player","color",pcol)
-	UI_setAttribute("routes_dialog_pnl","active",true)
 end
 
 --[[ *****************************
@@ -2002,7 +1926,7 @@ function startPlayerTurn(pcol)
 	if palace then unplayedPalacesLock(pcol, false) end
 	if pool then buildPoolLock(pcol, false) end
 	if move then placedHousesLock(pcol, false) end
-	if track then governorButtons(true) end
+	if track then setGovernorButtons(true) end
 	if char then charactersLock(pcol, false) end
 	--enable player board for actions
 	local txt = "Execute actions in any order.\n" 			--TODO: make this a constant?
@@ -2188,75 +2112,6 @@ function finishCurrentRound()
 	end
 end
 
---[[ ****************************
-Calculate gold payouts for all players with presence in the city.
-********************************]]
-function scoreCity(city)
-	if env.test.trace then log("doCityScoring(): "..tostring(city)) end
-	local scores = GD.game.city_scores[city]
-	if env.test.debug then
-		log("scores for city:")
-		log(scores)
-	end
-	if GD.env.verbose then printToAll("Scoring city: "..tostring(city)) end
-	local places = {}
-	local player_list = simpleDeepCopy(GD.game.player_order)
-	--cull players with 0 score
-	for pcol,score in pairs(scores) do
-		if score == 0 then
-			table.remove(player_list, indexOf(player_list,pcol))
-			if GD.env.verbose then printToAll(pcol.." has no presence in city, recieves 0 gold") end
-		end
-	end
-	--rank players by score in city
-	local safety = 5
-	while #player_list > 0 and safety > 0 do
-		local highest = {score=0, player=""}
-		for pcol,score in pairs(scores) do
-			if contains(player_list, pcol) then
-				if score > highest.score then
-					highest.score = score
-					highest.player = pcol
-				elseif score == highest.score then
-					if GD.game.players[pcol].character_id < GD.game.players[highest.player].character_id then
-						highest.player = pcol
-					end
-				end
-			end
-		end
-		table.insert(places, highest)
-		local index = indexOf(player_list, highest.player)
-		table.remove(player_list, index)
-		safety = safety - 1
-	end
-	if #places == 0 then
-		log("Handle case nobody scored anything")
-		if GD.env.verbose then printToAll("No players recieve gold for city scoring") end
-		return
-	end
-	--hand out money based on score ranking
-	local index = 0
-	local payouts = C.city_payouts[#GD.game.player_order]
-	for i,place in ipairs(places) do
-		local pay = payouts[i]
-		local player = GD.game.players[place.player]
-		player.gold = player.gold + pay
-		getObjectFromGUID(C.player_boards[place.player]).call("setState",{gold_coins=player.gold})
-		if GD.env.verbose then printToAll(place.player.." recieves "..tostring(pay).." gold for city scoring") end
-	end
-	--monopoly bonus
-	if #places == 1 then
-		local place = places[1]
-		local player = GD.game.players[place.player]
-		player.gold = player.gold + 5
-		getObjectFromGUID(C.player_boards[place.player]).call("setState",{gold_coins=player.gold})
-		if GD.env.verbose then printToAll(place.player.." recieves 5 gold for city monopoly bonus") end
-	end
-
-	--TODO: show a results dialog ???  or is game log enough?
-
-end
-
 --[[ *****************************
 TODO: document
 --POP an entry off the player's LIFO pending actions stack
@@ -2299,8 +2154,7 @@ function playerUndo(pcol)
 	elseif action.key == "track" then
 		GD.game.governor_track = simpleDeepCopy(action.undo.restore_list)
 		updateGovernorTrack()
-		updateStatusPanel()
-		governorButtons(true)
+		setGovernorButtons(true)
 		resetAction(pcol, action)
 		updateDialUI(pcol)
 		player.governor_clicked = false
@@ -2401,7 +2255,6 @@ function playerUndo(pcol)
 			end
 		end
 		updateCityScores()
-		updateStatusPanel()
 		resetAction(pcol, action)
 		updateDialUI(pcol)
 	elseif action.key == "architect" then
@@ -2413,7 +2266,6 @@ function playerUndo(pcol)
 		player.architect_location.current_node = old_node
 		player.architect_location.snap_pos = return_pos
 		updateCityScores()
-		updateStatusPanel()
 		if action.route_cost > 0 then
 			for color,cost in pairs(action.costs) do
 				local opp = GD.game.players[color]
@@ -2445,7 +2297,6 @@ function playerUndo(pcol)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 		updateDialUI(pcol)
 		updateCityScores(node)
-		updateStatusPanel()
 	else
 		log("*** ERROR: playerUndo() unknown action key "..tostring(action.key))
 		return
@@ -2488,9 +2339,8 @@ function moveMaharaja()
 		track[i-1].UI_row = track[i-1].UI_row + 1
 	end
 	track[7] = temp
-	-- update city status UI
 	updateGovernorTrack()
-	updateStatusPanel()
+	GD.game.maharaja_node = track[1].node
 end
 
 --[[ ********* TODO **************
@@ -2502,6 +2352,150 @@ function endGame()
 end
 
 --[[/////////////// Support functions /////////////////////]]
+
+--[[ ****************************
+Calculate gold payouts for all players with presence in the city.
+********************************]]
+function scoreCity(city)
+	if env.test.trace then log("doCityScoring(): "..tostring(city)) end
+	local scores = GD.game.city_scores[city]
+	if env.test.debug then
+		log("scores for city:")
+		log(scores)
+	end
+	if GD.env.verbose then printToAll("Scoring city: "..tostring(city)) end
+	local places = {}
+	local player_list = simpleDeepCopy(GD.game.player_order)
+	--cull players with 0 score
+	for pcol,score in pairs(scores) do
+		if score == 0 then
+			table.remove(player_list, indexOf(player_list,pcol))
+			if GD.env.verbose then printToAll(pcol.." has no presence in city, recieves 0 gold") end
+		end
+	end
+	--rank players by score in city
+	local safety = 5
+	while #player_list > 0 and safety > 0 do
+		local highest = {score=0, player=""}
+		for pcol,score in pairs(scores) do
+			if contains(player_list, pcol) then
+				if score > highest.score then
+					highest.score = score
+					highest.player = pcol
+				elseif score == highest.score then
+					if GD.game.players[pcol].character_id < GD.game.players[highest.player].character_id then
+						highest.player = pcol
+					end
+				end
+			end
+		end
+		table.insert(places, highest)
+		local index = indexOf(player_list, highest.player)
+		table.remove(player_list, index)
+		safety = safety - 1
+	end
+	if #places == 0 then
+		log("Handle case nobody scored anything")
+		if GD.env.verbose then printToAll("No players recieve gold for city scoring") end
+		return
+	end
+	--hand out money based on score ranking
+	local index = 0
+	local payouts = C.city_payouts[#GD.game.player_order]
+	for i,place in ipairs(places) do
+		local pay = payouts[i]
+		local player = GD.game.players[place.player]
+		player.gold = player.gold + pay
+		getObjectFromGUID(C.player_boards[place.player]).call("setState",{gold_coins=player.gold})
+		if GD.env.verbose then printToAll(place.player.." recieves "..tostring(pay).." gold for city scoring") end
+	end
+	--monopoly bonus
+	if #places == 1 then
+		local place = places[1]
+		local player = GD.game.players[place.player]
+		player.gold = player.gold + 5
+		getObjectFromGUID(C.player_boards[place.player]).call("setState",{gold_coins=player.gold})
+		if GD.env.verbose then printToAll(place.player.." recieves 5 gold for city monopoly bonus") end
+	end
+
+	--TODO: show a results dialog ???  or is game log enough?
+end
+
+--[[ ******** TODO: sort on opp ************
+Bubble sort the route table.
+Primary sort index is total cost for route
+TODO: use opp cost as secondary sort index
+********************************]]
+function sortRoutes(pcol, opp)
+	if env.test.trace then log("sortRoutes() "..tostring(pcol)) end
+	assert(pcol, "***ERROR: missing player color")
+	local opp = opp or "none"
+	if env.test.debug then log("using opponent "..opp.." for secondary index") end
+	local player = GD.game.players[pcol]
+	local routes = player.route_table
+	assert(routes, "***ERROR: no route table for player "..pcol)
+	local sorted = {}
+	for i,route in ipairs(routes) do
+		if #sorted == 0 then
+			table.insert(sorted, route)
+		else
+			local found = false
+			for j,e in ipairs(sorted) do
+				if route.total_cost < e.total_cost then
+					table.insert(sorted, j, route)
+					found = true
+					break
+				elseif route.total_cost == e.total_cost then
+					if opp == "none" then
+						table.insert(sorted, j, route)
+						found = true
+						break
+					else
+						--TODO: check opp
+					end
+				end
+			end
+			if not(found) then table.insert(sorted, route) end
+		end
+	end
+	player.route_table = sorted
+end
+
+--[[ *****************************
+Update the route dialog with latest route table for player
+********************************]]
+function updateRouteDialog(pcol)
+	if env.test.trace then log("updateRouteDialog() "..tostring(pcol)) end
+	assert(pcol, "***ERROR: missing player color")
+	local player = GD.game.players[pcol]
+	local routes = player.route_table
+	assert(routes, "***ERROR: no route table for player "..pcol)
+	--clear all rows first and deactivate
+	for i=1,GD.env.max_route_rows do
+		UI_setAttribute("route_"..tostring(i).."_row","active",false)
+		UI_setAttribute("route_"..tostring(i).."_total_cost","text","0")
+		for _,color in ipairs(GD.game.player_order) do
+			UI_setAttribute("route_"..tostring(i).."_"..color.."_cost_txt","text","")
+		end
+	end
+	--fill rows from player's route table
+	for i,route in ipairs(routes) do
+		local r = tostring(i)
+		UI_setAttribute("route_"..r.."_btn_txt","text",route.cities)
+		for _,color in ipairs(GD.game.player_order) do
+			if route.costs[color] then
+				UI_setAttribute("route_"..r.."_"..color.."_cost_txt","text",tostring(route.costs[color]))
+			else
+				UI_setAttribute("route_"..r.."_"..color.."_cost_txt","text","")
+			end
+		end
+		UI_setAttribute("route_"..r.."_total_cost","text",tostring(route.total_cost))
+		UI_setAttribute("route_"..r.."_row","active",true)
+	end
+	UI_setAttribute("routes_dialog_title_player","text",pcol)
+	UI_setAttribute("routes_dialog_title_player","color",pcol)
+	UI_setAttribute("routes_dialog_pnl","active",true)
+end
 
 --[[ *****************************
 Set the character bonus based on current character ID.
@@ -2730,27 +2724,6 @@ end
 For a given network node (that is a city) update the
 City score for each player
 ********************************]]
--- function updateCityScores(node)
--- 	if env.test.trace then log("updateCityScores() "..tostring(node.name)..", "..tostring(node.id)) end
--- 	assert(node.type == "city", "***ERROR: updateCityScores() node "..tostring(node.id).." is not a city")
--- 	for _,pcol in ipairs(GD.game.player_order) do
--- 		local score = #node.houses[pcol]
--- 		if GD.game.players[pcol].architect_location.current_node == node.id then score = score + 1 end
--- 		for _,palace in pairs(node.palaces) do
--- 			if palace.c == pcol then
--- 				if GD.game.players[pcol].character_id == 3 then
--- 					score = score + 2
--- 				else
--- 					score = score + 1
--- 				end
--- 			end
--- 		end
--- 		if node.center_palace then
--- 			if node.center_palace.c == pcol then score = score + 3 end
--- 		end
--- 		GD.game.city_scores[node.name][pcol] = score
--- 	end
--- end
 function updateCityScores(node)
 	if env.test.trace then log("updateCityScores()") end
 	local function updateScores(node)
@@ -2780,6 +2753,7 @@ function updateCityScores(node)
 			updateScores(GD.network[city.node])
 		end
 	end
+	updateStatusPanel()
 end
 
 --[[ ***************************
@@ -2791,6 +2765,11 @@ function updateStatusPanel()
 	for i,gov in ipairs(GD.game.governor_track) do
 		UI_setAttribute("status_city_name_"..gov.UI_row, "text", gov.city)
 		UI_setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
+		if gov.node == GD.game.maharaja_node then
+			UI_setAttribute("status_city_name_"..gov.UI_row, "color", "rgb(1,1,0)")
+		else
+			UI_setAttribute("status_city_name_"..gov.UI_row, "color", "white")
+		end
 		local scores = GD.game.city_scores[gov.city]
 		for pcol,score in pairs(scores) do
 			if score > 0 then
@@ -3006,7 +2985,7 @@ end
 --[[ *****************************
 TODO: implement and document
 ********************************]]
-function governorButtons(on)
+function setGovernorButtons(on)
 	on = on or false
 	if env.test.trace then log("enableGovernorButtons() "..tostring(on)) end
 	local board = getObjectFromGUID(C.board_guid)
@@ -3072,9 +3051,9 @@ params:
 		player_color: The player color.
 		actions: The list of actions for an update (command==set)
 ********************************]]
-function updatePlayerActionSelection(params)
-		log("***WARN: updatePlayerActionSelection() is deprecated")
-end
+-- function updatePlayerActionSelection(params)
+-- 		log("***WARN: updatePlayerActionSelection() is deprecated")
+-- end
 
 --[[ ***************************
 Called from player dial during player action selection.

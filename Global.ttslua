@@ -27,11 +27,12 @@ TTS mod for Maharaja
 
 	--TODO: TEST lots of stuff.  Like doubling track action, doubling character trade action.  etc.
 	--TODO: TEST move action
-	--TODO: Handle more than 6 houses of a color in a city BUG <----------
 	--TODO: implement end game
 
 *** OTHER STUFF ***
 
+	--TODO: consider unlocking only last house in pool (and last palace).  Check after each drop, unlock another if more actions.
+					Also lock all placed houses after move if no more moves.
 	--TODO: BUG ?? when building house in city, don't pick city/village option if city only is avaialbe in unused turn actions
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
 	--TODO: TEST: possibly need to dedupe and refactor code for updating/setting player character bonuses.  Got very messy after`
@@ -43,17 +44,16 @@ TTS mod for Maharaja
 
 *** BUGs ***
 
-	--BUG: Need to lock everything, disable track buttons, etc. when extra action is clicked.
+	***BUG: broke #2 character, not giving +2 gold on startPlayerTurn()
+	***BUG: Handle more than 6 houses of a color in a city
+	***BUG TESTING palaces are not locked after placing
+	**BUG: handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
+	**BUG: Need to lock everything, disable track buttons, etc. when extra action is clicked.
 				Maybe need a function to scan turn actions and lock;unlock stuff. (see extra action set and undo that does this)  Needed several places.
+	**BUG if 8 cities in route, last one is cut off in dialog button text
+	**BUG game breaks (im sure) if player picks up multiple houses, palaces etc.  Handle in onDrop or in onPickup?
 	--BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too.
 	--BUG (maybe?) not sure if character_id are updated to break ties when swap is final action before scoring, TEST all scoring and tie breaker
-	--BUG palaces are not locked after placing
-	--BUG if 8 cities in route, last one is cut off in dialog button text
-	--BUG FIXED? TESTING: see "nil bug" tags
-		--BUG: select actions: alternating between palace/house and palace actions results in extra build house turn actions in dialog
-		--BUG: related?  turn action index can get gaps in it, i.e. 1,2,4.  Probably setting entry to nil somewhere vs. using table.remove
-						breaks ipairs() indexer causing trouble in mutliple places (updateDialUI(), )
-	--BUG game breaks (im sure) if player picks up multiple houses, palaces etc.  Handle in onDrop or in onPickup?
 
 ==========================================================================================]]
 
@@ -74,6 +74,8 @@ env.test.players = {"Green","Red","Blue"}
 env.game = {}
 env.game.fill_delay = 2
 env.game.use_help = true
+env.game.auto_select_zero_route = true
+env.game.auto_select_unique_cheapest_route = false  --TODO: not working yet to enable
 
 GD = {}
 
@@ -883,8 +885,8 @@ function setupPlayers()
 		player.actions_set = false
 		player.pointers = {}
 		player.prefs = {}
-		player.prefs.auto_select_zero_route = false
-		player.prefs.auto_select_unique_cheapest_route = false
+		player.prefs.auto_select_zero_route = env.game.auto_select_zero_route
+		player.prefs.auto_select_unique_cheapest_route = env.game.auto_select_unique_cheapest_route
 		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
 		--initialize player pool
 		local player_board = getObjectFromGUID(C.player_boards[pcol])
@@ -1389,10 +1391,11 @@ function houseDrop(pcol, obj)
 	local board = getObjectFromGUID(C.board_guid)
 	local player = GD.game.players[pcol]
 	local color = obj.getName()
-	--/////// local functions ///////
 
+	--/////// local functions ///////
 	--[[TODO: document]]
 	local function snapBack(obj)
+		if env.test.trace then log("snapBack() "..tostring(obj)) end
 		local pos = getPlacedObjectSnap(obj.getGUID())
 		if pos then
 			obj.setPosition(pos)
@@ -1402,11 +1405,10 @@ function houseDrop(pcol, obj)
 			obj.setRotation(getObjectFromGUID(C.player_boards[color]).getRotation())
 		end
 	end
-
 	--[[TODO: document]]
 	local function placeVillageHouse(obj, node)
-		if env.test.trace then log("placeVillageHouse() "..tostring(obj)..", "..tostring(node)) end
-		if env.test.debug then log(node) end
+		if env.test.trace then log("placeVillageHouse() "..tostring(obj)..", node "..tostring(node.id)) end
+		-- if env.test.debug then log(node) end
 		table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
 		local pos = board.positionToWorld(Vector(node.center))
 		if GD.game.player_count > 2 then
@@ -1420,11 +1422,10 @@ function houseDrop(pcol, obj)
 		obj.setPosition(pos)
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
-
 	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
-		if env.test.trace then log("placeCityHouse() "..tostring(obj)..", "..tostring(node)) end
-		if env.test.debug then log(node) end
+		if env.test.trace then log("placeCityHouse() "..tostring(obj)..", node "..tostring(node.id)) end
+		-- if env.test.debug then log(node) end
 		local color = obj.getName()
 		local center = GD.network[node.id].center
 		log(tostring(node.name).." center is "..tostring(center))
@@ -1438,49 +1439,6 @@ function houseDrop(pcol, obj)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
 		table.insert(node.houses[color],obj.getGUID())
 		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-	end
-
-	--[[  TODO: merge with global helper function?
-	Override this function locally for house drop special case handling
-	find first available turn action for the pending_action.key
-	Search required actions (dial selected) first, then try free action. ]]
-	local function setActionIndex(pcol, pending_action)
-		if env.test.trace then log("setActionIndex()") end
-		if env.test.debug then
-			log("pcol "..tostring(pcol))
-			log("pending action:")
-			log(pending_action)
-		end
-		local action_index = -1
-		local free_action = false
-		local player = GD.game.players[pcol]
-		--search first for a pointer action
-		for i,a in ipairs(player.turn_actions) do
-			if a.id == pending_action.key and a.status == "" and a.pointer_id ~= "" then
-				if a.city_required then  --HACK: ugly special case for build in a city only action
-					if pending_action.location == "city" then
-						action_index = i
-						break
-					end
-				else
-					action_index = i
-					break
-				end
-			end
-		end
-		if action_index == -1 then
-			--no pointer action so search for a free action (no pointer_id)
-			for i,a in ipairs(player.turn_actions) do
-				if a.id == pending_action.key and a.status == "" and a.pointer_id == "" then
-					action_index = i
-					free_action = true
-					break
-				end
-			end
-		end
-		--set the values in the pending action (pass by reference)
-		pending_action.action_index = action_index
-		pending_action.free_action = free_action
 	end
 	--//////////////////////////////////
 
@@ -1548,8 +1506,17 @@ function houseDrop(pcol, obj)
 				pending_action.undo.snapback.rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
  				pending_action.key = "build"
 			end
-			setActionIndex(pcol, pending_action)
-			if pending_action.action_index == -1 then
+			local turn_action
+			if node.type == "city" then
+				turn_action = getAvailableAction(pcol, pending_action.key)
+				if not(turn_action) then turn_action = getAvailableAction(pcol, pending_action.key) end
+			else
+				turn_action = getAvailableAction(pcol, pending_action.key, true) --special case: true == must be a city/village action
+			end
+			if turn_action then
+				pending_action.action_index = turn_action.index							--TODO: rather use turn_action reference in pending_action? avoid index? ok for JSON save encode?
+				pending_action.free_action = (turn_action.pointer_id == "")
+			else
 				snapBack(obj)
 				if GD.env.verbose then broadcastToColor("No more "..pending_action.key.." actions", pcol) end
 				return
@@ -1573,7 +1540,7 @@ function houseDrop(pcol, obj)
 				if player.architect_location.current_node == node_index then
 					placeCityHouse(obj, node)
 					if pending_action.key == "move" then
-						updateCityScores()
+						updateCityScores()  --may have moved from and to a city, update all
 					else
 						updateCityScores(node)
 					end
@@ -1594,7 +1561,7 @@ function houseDrop(pcol, obj)
 			else
 				if GD.env.verbose then printToAll(pcol.." moves a house") end
 			end
-			updateTurnAction(pcol, pending_action)
+			turn_action.status = "Done"
 			updateDialUI(pcol)
 			table.insert(player.pending_actions, pending_action)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
@@ -1636,11 +1603,11 @@ function palaceDrop(pcol, obj)
 			node.center_palace = {g=obj.getGUID(),c=color,}
 		end
 		pos.y = 1.5
-		log("position is:")
-		log(pos)
 		obj.setRotationSmooth(rot, false, true)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
-		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		Wait.frames(function() --start moving TESTING BUG FIX: lock palaces after placing
+			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		end, 1)
 	end
 	--//////////////////////////////////
 
@@ -2163,7 +2130,7 @@ TODO: document
 function playerUndo(pcol)
 	if env.test.trace then log("playerUndo(): "..pcol) end
 	local function resetAction(pcol, action)
-		for _,a in pairs(GD.game.players[pcol].turn_actions) do
+		for _,a in pairs(GD.game.players[pcol].turn_actions) do				--TODO: if a.index always matches array index, is loop necessary?  Because of free action?
 			if a.free and action.free_action then a.status = ""; break
 			elseif a.index == action.action_index then a.status = ""; break end
 		end
@@ -2209,7 +2176,7 @@ function playerUndo(pcol)
 			local i = indexOf(node.houses[pcol], action.guid)
 			if i > 0 then
 				table.remove(node.houses[pcol], i)
-			else
+			else --DEBUG
 				log("***ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))
 			end
 			updateCityScores(node)
@@ -2219,7 +2186,7 @@ function playerUndo(pcol)
 				node.houses[1] = nil
 			elseif node.houses[2] and node.houses[2].g == action.guid then
 				node.houses[2] = nil
-			else
+			else --DEBUG
 				log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))
 				return
 			end
@@ -2648,8 +2615,7 @@ if supplied action is "free" then only checks for free dial action.
 Otherwise searches all dial actions.
 if one is found, it is set to "Done" (finished) and returns true.
 If no unfinished matching action is found returns false.
-TODO: get rid of return value, earlier calls to hasAvailableAction() should prevent a failed lookup here.
-HACK: special case for city only build
+TODO: may not need this with getAvailableAction() refactoring, already have a reference to the turn_action
 ********************************]]
 function updateTurnAction(pcol, pending_action)
 	if env.test.trace then log("updateTurnAction() "..tostring(pcol)..", "..tostring(pending_action.key)) end
@@ -2680,7 +2646,7 @@ function updateTurnAction(pcol, pending_action)
 			end
 		end
 	end
-	if not(success) then
+	if not(success) then --DEBUG
 		--this really shouldn't happen if earlier checks are working, here for debugging
 		log("***ERROR: updateTurnAction() could not locate turn action for pending action:")
 		log(pending_action)
@@ -2711,23 +2677,53 @@ function hasRequiredActions(pcol)
 end
 
 --[[ *****************************
-Check to see if a player has any unfinished action of specified action id.
-Return true if any, false if not.
+Search player turn actions for an unfinished action of specified action key.
+key: aaction_key to search for
+HACK: village: (Optional) for build actions only, if true, must be a city/village action.  Default false.
+Return reference to a player turn action.  Nil if none found.
 ********************************]]
-function hasAvailableAction(pcol, pending_action)
-	if env.test.trace then log("hasAvailableAction() "..tostring(pcol)..", key = "..tostring(pending_action.key)) end
-	for id,action in pairs(GD.game.players[pcol].turn_actions) do
-		if action.id == pending_action.key and action.status == "" then
-			if action.city_required then
-				if pending_action.location == "city" then  --HACK: ugly special case
-					return true
-				end
-			else
-				return true
+function getAvailableAction(pcol, key, village)
+	local village = village or false
+	if env.test.trace then log("getAvailableAction() "..tostring(pcol)..", key: "..tostring(key)..", city: "..tostring(city)) end
+	if key == "build" and village then
+		--must be a city/village build action, avoid free if possible
+		for id,action in pairs(GD.game.players[pcol].turn_actions) do
+			if action.id == key and action.status == "" and not(action.city_required) and not(action.free) then
+				return action
+			end
+		end
+		for id,action in pairs(GD.game.players[pcol].turn_actions) do
+			if action.id == key and action.status == "" and not(action.city_required) then
+				return action
+			end
+		end
+	elseif key == "build" then
+		--look for a city only build action first, then look for city/village
+		for id,action in pairs(GD.game.players[pcol].turn_actions) do
+			if action.id == key and action.status == "" and action.city_required then
+				return action
+			end
+		end
+		--find any build action, avoid free if possible
+		for id,action in pairs(GD.game.players[pcol].turn_actions) do
+			if action.id == key and action.status == "" and not(action.free) then
+				return action
+			end
+		end
+		for id,action in pairs(GD.game.players[pcol].turn_actions) do
+			if action.id == key and action.status == "" then
+				return action
+			end
+		end
+	else
+		--not a build, find any available action matching key
+		for id,action in pairs(GD.game.players[pcol].turn_actions) do
+			if action.id == key and action.status == "" then
+				return action
 			end
 		end
 	end
-	return false
+	return nil
 end
 
 --[[ *****************************
@@ -2741,6 +2737,18 @@ function buildPoolLock(pcol, locked)
 	end
 end
 
+--[[ **** TODO: not used, redundant ********
+Set the locked state of a player's build pool
+Defaults to unlocked
+********************************]]
+-- function poolLock(pcol, locked)
+-- 	locked = locked or false
+-- 	if env.test.trace then log("poolLock() "..tostring(locked)) end
+-- 	for _,e in ipairs(GD.game.players[pcol].pool) do
+-- 		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+-- 	end
+-- end
+
 --[[ *****************************
 Set the locked state of a player's unplayed palaces
 ********************************]]
@@ -2751,6 +2759,18 @@ function unplayedPalacesLock(pcol, locked)
 		if e.g then getObjectFromGUID(e.g).setLock(locked) end
 	end
 end
+
+--[[ ***** TODO: not used, redundant **********
+Set the locked state of a palaces on a player board
+Defaults to unlocked
+********************************]]
+-- function palacesLock(pcol, locked)
+-- 	locked = locked or false
+-- 	if env.test.trace then log("palacesLock() "..tostring(locked)) end
+-- 	for _,e in ipairs(GD.game.players[pcol].palaces) do
+-- 		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+-- 	end
+-- end
 
 --[[ *****************************
 Set the locked state of a player's placed houses
@@ -2765,30 +2785,6 @@ function placedHousesLock(pcol, locked)
 		else
 			log("***ERROR: unable to unlock placed house for "..tostring(g))
 		end
-	end
-end
-
---[[ *****************************
-Set the locked state of a palaces on a player board
-Defaults to unlocked
-********************************]]
-function palacesLock(pcol, locked)
-	locked = locked or false
-	if env.test.trace then log("palacesLock() "..tostring(locked)) end
-	for _,e in ipairs(GD.game.players[pcol].palaces) do
-		if e.g then getObjectFromGUID(e.g).setLock(locked) end
-	end
-end
-
---[[ *****************************
-Set the locked state of a player's build pool
-Defaults to unlocked
-********************************]]
-function poolLock(pcol, locked)
-	locked = locked or false
-	if env.test.trace then log("poolLock() "..tostring(locked)) end
-	for _,e in ipairs(GD.game.players[pcol].pool) do
-		if e.g then getObjectFromGUID(e.g).setLock(locked) end
 	end
 end
 

@@ -90,7 +90,6 @@
                   <Row>
                     <Cell/>
                     <Cell padding="0 0 0 0">
-                      <!--Image id="extraAction_btn" image="action_token" onClick="Global/playerBoardClick" -->
                       <Image id="extraAction_btn" image="action_token">
                         <Text id="extra_actions_txt" fontSize="26" text="-"/>
                       </Image>

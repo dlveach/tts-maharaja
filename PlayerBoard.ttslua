@@ -8,7 +8,7 @@ env={}
 UI_TEST = false
 
 BUTTON_PARAMS = {
-  click_function="extraActionClick",
+  click_function="extraActionToken",
   function_owner=Global,
   position={-0.55,0,-1.25},
   rotation={0,0,0},
@@ -27,6 +27,18 @@ function onLoad(saved_data)
   assert(env, "*** ERROR: no env from Global")
   GD = {}
   GD.color = self.getName()
+
+  --set button ids for this board
+  local xml = self.UI.getXmlTable()
+  local btn = getXmlElement("done_btn",xml)
+  if btn then btn.attributes.id = GD.color.."_done_btn" end
+  btn = getXmlElement("extraAction_btn",xml)
+  if btn then btn.attributes.id = GD.color.."_extraAction_btn" end
+  btn = getXmlElement("undo_btn",xml)
+  if btn then btn.attributes.id = GD.color.."_undo_btn" end
+  self.UI.setXmlTable(xml)
+
+  --restore any saved data or setup fresh data
   if saved_data ~= "" then
     if env.test.trace then log(gid.."onLoad(): Loading from saved state") end
     local restore_data = JSON.decode(saved_data)
@@ -40,6 +52,7 @@ function onLoad(saved_data)
     GD.state.undo = false
     GD.state.turn_order = 0
     GD.state.extra_actions = 0
+    GD.state.extra_button = false
     GD.state.gold_coins = 0
     GD.state.help_text = ""
   end
@@ -86,7 +99,7 @@ function updateUI()
       self.UI.setAttribute("help_txt_pnl","active", GD.state.active_player)
     end
   end
-  if GD.state.active_player and GD.state.extra_actions > 0 then
+  if GD.state.active_player and GD.state.extra_button and GD.state.extra_actions > 0 then
     if self.getButtons() == nil then
       self.createButton(BUTTON_PARAMS)
     end
@@ -102,7 +115,8 @@ params{}:
   active -  (Bool) True when this is the active player, show buttons.
   undo - (Bool) True if Undo button should be shown.
   turn_order - (Int) Player's turn order.  Shows '?' if < 1.
-  extra_actions -(Int) Number of extra actions, shows button if > 0.
+  extra_actions -(Int) Number of extra actions,
+  extra_button - (Bool) enable extra action button
   show_help - (Bool) Show/Hide the help text box above the board.
   help_text - (Text) The help text to display.
 ********************************]]
@@ -118,6 +132,7 @@ function setState(params)
     if params.extra_actions != nil then GD.state.extra_actions = params.extra_actions end
     if params.gold_coins != nil then GD.state.gold_coins = params.gold_coins end
     if params.help_text != nil then GD.state.help_text = params.help_text end
+    if params.extra_button != nil then GD.state.extra_button = params.extra_button end
   else
     --defaults to non-active player if no params supplied
     GD.state.active_player = false
@@ -126,3 +141,5 @@ function setState(params)
   end
   updateUI()
 end
+
+require("tts-lib/utils")

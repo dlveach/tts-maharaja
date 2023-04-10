@@ -40,6 +40,15 @@
         image="Sprites/Layout/Button"
         color="Blue" />
 
+  <Button class="extraActionButton"
+    hoverClass="hover"
+    pressClass="press"
+    selectClass="select"
+    onClick="extraActionBtnClick"
+    image="Sprites/Layout/Button"
+    color="Blue" />
+
+
   <Button class="hover"
         color="Cyan" />
   <Button class="press"
@@ -79,6 +88,33 @@
   <Button class="modifyButton" id="modify" >
     <Text fontSize="20" color="rgb(1,1,0)" text="Modify" />
   </Button>
+</Panel>
+
+<Panel id="extra_action_panel" active="false"
+  height="60" width="400"
+  color="rgb(0,0,0,0)"
+  rotation="0 0 180"
+  scale="1 1"
+  position="0 -200 -10">
+  <TableLayout columnWidths="0 200 0">
+    <Row>
+      <Cell padding="0 0 0 0">
+        <Panel id="extra_action_set_pnl" color="rgba(0,0,0,0)" >
+          <Button id="extra_action_set_btn" class="extraActionButton">
+            <Text fontSize="24" text="Set"/>
+          </Button>
+        </Panel>
+      </Cell>
+      <Cell/>
+      <Cell padding="0 0 0 0">
+        <Panel id="extra_action_cancel_pnl" color="rgba(0,0,0,0)" >
+          <Button id="extra_action_cancel_btn" class="extraActionButton">
+            <Text fontSize="24" text="Cancel"/>
+          </Button>
+        </Panel>
+      </Cell>
+    </Row>
+  </TableLayout>
 </Panel>
 
 <Panel id="player_actions_panel" class="playerPanel">

@@ -19,9 +19,21 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////]]
 
 --[[==========================================================================================
-TTS mod for Maharaja
+		TTS mod for Maharaja
+			by David Veach, 2023
 
---TODO: documentation
+		Credits
+			Maharaja: The game of palace building in india
+			Authors: Wolfgang Kramer and Michael Kiesling
+			Artist Franz Vohwinkel
+			Year released: 2004
+			Publisher: 	Phalanx Games B.V.
+									Phalanx Games Deutschland
+									Asmodee
+									KDS Distribuzione (Italy)
+									Mayfair Games
+
+		BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building-india
 
 *** MVP FEATURES ***
 
@@ -30,27 +42,28 @@ TTS mod for Maharaja
 
 *** OTHER STUFF ***
 
-	--TODO: add verbose game prints for undo actions
 	--TODO: ask player if free action should be used vs paid action. Better: make it clickable to signify preference?
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
-	--TODO: TEST: refactored character bonus assignment.  messy.  check for bugs.
 	--TODO: add player prefs dialog.  So far, auto_select_zero_route is an option.  maybe auto_select_unique_cheapest_route
 	--TODO: (maybe) during action selection, don't show dial pointers until an action is clicked ??  (minor)
 	--TODO: (maybe) unlock only last house in pool (and last palace).  Check after each drop, unlock another if more actions.
 	--TODO: (maybe) lock things (pool, placed houses etc.) after action if no more actions of that type.
 	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Takes too long to load.
 
+	--TODO: DONE TESTING refactored character bonus assignment.  messy.  check for bugs.
+	--TODO: DONE TESTING add verbose game prints for undo actions
+
 *** BUGs ***
 
 	****BUG: handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
 	****BUG: Handle more than 6 houses of a color in a city
-	**BUG if 8 cities in route, last one is cut off in dialog button text
 	*BUG (maybe?) game breaks if player picks up and drops multiple houses, palaces etc.  Limit count in onPickup?
 	*BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too. (check is this still a bug?)
 	*BUG (maybe?) (SEE FIXES) not sure if character_id are updated to break ties when swap is final action before city scoring, TEST all scoring and tie breaker
 
 *** FIXES IN TESTING ***
 
+	**BUG FIXED TESTING if 8 cities in route, last one is cut off in dialog button text
 	***BUG FIXED TESTING palaces are not locked after placing
 	**BUG; FIXED TESTING when building house in city, don't pick city/village option if city only is avaialbe in unused turn actions (see TODO on asking player)
 	***BUG: FIXED TESTING character free action not being removed from turn_actions on exchanging away Builder character
@@ -87,6 +100,7 @@ GD = {}
 TTS Game Load
 ********************************]]
 function onLoad(saved_data)
+	-- if true then return end
 	if env.test.force_fresh_save then saved_data = "" end
 	--Initialize stuff
 	if not(env.test.in_dev) then
@@ -717,8 +731,8 @@ function setupGlobalUI()
 	--[[ Setup the City Scoring Status dialog]]
 	local status_panel = getXmlElement("statusPanel",xml)
 	local status_table = getXmlElement("status_table",status_panel)
-	local columnWidths="100 40"
-	local panel_width = 140
+	local columnWidths="120 40 36"
+	local panel_width = 120 + 40 + 36
 	--setup the header row
 	local index = 3
 	local player_columns = {}
@@ -779,10 +793,10 @@ function setupGlobalUI()
 
 	--[[Setup the Route Picker dialog]]
 	local routes_dialog_pnl = getXmlElement("routes_dialog_pnl",xml)
-	local w = 100 + 40 + 36 + (#GD.game.player_order * 36) - 6
+	local w = 120 + 40 + 36 + (#GD.game.player_order * 36) - 6
 	routes_dialog_pnl.attributes.width = tostring(w)
 	local routes_main_tbl = getXmlElement("routes_main_tbl", routes_dialog_pnl)
-	local s = "100 40 36"
+	local s = "120 40 36"
 	for i=1,#GD.game.player_order do s = s .. " 36" end
 	routes_main_tbl.attributes.columnWidths = s
 	--setup header row

@@ -238,7 +238,7 @@
 <Panel id="routes_dialog_pnl" active="false"
   allowDragging="true"
   returnToOriginalPositionWhenReleased="false"
-  width="206" height="400"
+  width="226" height="400"
   offsetXY="500 100"
   color="rgba(0,0,0,0)" >
   <TableLayout id="route_picker_tbl"
@@ -267,7 +267,7 @@
     <Row preferredHeight="360">
       <Cell>
         <Panel color="#00091a">
-          <TableLayout id="routes_main_tbl" columnWidths="100 40 36 36 36 36" color="rgba(0,0,0,0)">
+          <TableLayout id="routes_main_tbl" columnWidths="120 40 36 36 36 36" color="rgba(0,0,0,0)">
             <Row id="routes_header_row" preferredHeight="30">
               <Cell/>
 
@@ -288,13 +288,13 @@
                   scrollbarColors="#174DAD|#174DAD|#174DAD|#174DAD" scrollbarImage="Sprites/Layout/Base"
                   scrollbarBackgroundColor="#2C63A3">
 
-                  <TableLayout id="route_tbl" columnWidths="100 40 36 36 36" color="rgba(0,0,0,0)"
+                  <TableLayout id="route_tbl" columnWidths="120 40 36 36 36" color="rgba(0,0,0,0)"
                     autoCalculateHeight="true">
 
                     <Row id="route_n_row_template">
                       <Cell>
                         <Button id="route_n_btn_template" image="Sprites/Layout/Button" onClick="routeSelectClick">
-                          <Text id="route_n_btn_txt_template" class="medium" color="rgb(1,1,0)" text="Route 1"/>
+                          <Text id="route_n_btn_txt_template" class="medium" color="rgb(1,1,0)" text="1 2 3 4 5 6 7 8"/>
                         </Button>
                       </Cell>
                       <Cell >

@@ -26,37 +26,35 @@ TTS mod for Maharaja
 *** MVP FEATURES ***
 
 	--TODO: TEST lots of stuff.  Like doubling track action, doubling character trade action.  etc.
-	--TODO: implement end game
+	--TODO: TEST end game
 
 *** OTHER STUFF ***
 
-	--TODO: ask player if free action (when available) should be used.
-	--TODO: consider unlocking only last house in pool (and last palace).  Check after each drop, unlock another if more actions.
-					Also lock all placed houses after move if no more moves.
+	--TODO: add verbose game prints for undo actions
+	--TODO: ask player if free action should be used vs paid action. Better: make it clickable to signify preference?
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
 	--TODO: TEST: refactored character bonus assignment.  messy.  check for bugs.
+	--TODO: add player prefs dialog.  So far, auto_select_zero_route is an option.  maybe auto_select_unique_cheapest_route
+	--TODO: (maybe) during action selection, don't show dial pointers until an action is clicked ??  (minor)
+	--TODO: (maybe) unlock only last house in pool (and last palace).  Check after each drop, unlock another if more actions.
+	--TODO: (maybe) lock things (pool, placed houses etc.) after action if no more actions of that type.
 	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Takes too long to load.
-	--TODO: add verbose game prints for undo actions
-	--TODO: add player prefs dialog (so far, auto_select_zero_route is an possible option)
-					-- auto_select_unique_cheapest_route could be another option
-	--TODO: during action selection, consider don't show dial pointers until an action is clicked ??  (minor)
 
 *** BUGs ***
 
-	***BUG: Handle more than 6 houses of a color in a city
-	**BUG: handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
+	****BUG: handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
+	****BUG: Handle more than 6 houses of a color in a city
 	**BUG if 8 cities in route, last one is cut off in dialog button text
-	**BUG game breaks (im sure) if player picks up multiple houses, palaces etc.  Handle in onDrop or in onPickup?
-	--BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too.
-	--BUG (maybe?) not sure if character_id are updated to break ties when swap is final action before scoring, TEST all scoring and tie breaker
+	*BUG (maybe?) game breaks if player picks up and drops multiple houses, palaces etc.  Limit count in onPickup?
+	*BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too. (check is this still a bug?)
+	*BUG (maybe?) (SEE FIXES) not sure if character_id are updated to break ties when swap is final action before city scoring, TEST all scoring and tie breaker
 
 *** FIXES IN TESTING ***
 
 	***BUG FIXED TESTING palaces are not locked after placing
 	**BUG; FIXED TESTING when building house in city, don't pick city/village option if city only is avaialbe in unused turn actions (see TODO on asking player)
 	***BUG: FIXED TESTING character free action not being removed from turn_actions on exchanging away Builder character
-		***BUG: FIXED TESTING Related: replacing character does not immediately update benefit.  eg: replacing with Sadhus (#3) just before scoring should update
-					the player's outer palaces to +2 vs +1 for city scoring
+	***BUG: FIXED TESTING replacing character does not immediately update benefit.  eg: replacing with Sadhus (#3) in a swap just before scoring
 	**BUG: FIXED TESTING Need to lock everything, disable track buttons, etc. when extra action is clicked.  Unlock when done to match turn actions.
 
 ==========================================================================================]]
@@ -460,8 +458,9 @@ function onObjectDrop(pcol, obj)
 	end
 end
 
---[[ ********* TODO **************
---TODO: implement and document
+--[[ ***************************
+Handle click on the extra action token.
+Enable extra action selection on the player dial.
 ********************************]]
 function extraActionToken(obj, pcol, rclick)
 	if env.test.trace then log("extraActionToken() "..obj.getName()..", "..pcol..", "..tostring(rclick)) end
@@ -573,6 +572,8 @@ end
 
 --[[ ********** TODO: sort by opp ***********
 Handle player click on route selector dialog
+Click on a route selects that route for payout for architect move.
+TODO: click on opponent in header sorts routes by cost to that opponent.
 ********************************]]
 function routeSelectClick(player, btn, id)
 	if env.test.trace then log("statusClick() "..player.color..", id: "..tostring(id)) end
@@ -2311,14 +2312,6 @@ function playerUndo(pcol)
 	end
 end
 
---[[ ********* TODO UNUSED? **************
-TODO: document
-********************************]]
--- function extraAction(pcol)
--- 	if env.test.trace then log("extraAction(): "..pcol) end
--- 	log("TODO: implement extraAction() <--------------------")
--- end
-
 --[[ *****************************
 TODO: implement and document
 ********************************]]
@@ -2346,12 +2339,53 @@ function moveMaharaja()
 	updateGovernorTrack()
 end
 
---[[ ********* TODO **************
-TODO: implement and document
+--[[ ********* TODO rank all players *******************
+Player with most palaces built wins.
+FIrst tie breaker is most gold.
+Second tie breaker is lowest character ID.
+--TODO rank all players and show a dialog of final rank
 ********************************]]
 function endGame()
-	if env.test.trace then log("endGame(): "..pcol) end
-	log("TODO: implement endGame() <--------------------")
+	if env.test.trace then log("endGame()") end
+	-- most palaces built.
+	local winners, most_palaces = {}, 0
+	for pcol,player in pairs(GD.game.players) do
+		if #player.placed_palaces > most_palaces then
+			most_palaces = #player.placed_palaces; winners = {pcol}
+		elseif #player.placed_palaces == most_palaces then
+			if #winners == 0 then winners = {pcol} else table.insert(winners, pcol) end
+		end
+	end
+	local tie_breaker
+	--first tie breaker if needed
+	if #winners > 1 then
+		tie_breaker = "most gold"
+		local temp, most_gold = {}, 0
+		for _,pcol in ipairs(winners) do
+			if GD.game.players[pcol].gold > most_gold then most_gold = GD.game.players[pcol].gold; temp = {pcol}
+			elseif GD.game.players[pcol].gold == most_gold then table.insert(temp, pcol) end
+		end
+		winners = temp
+	end
+	--second tie breaker if needed
+	if #winners > 1 then
+		tie_breaker = "lowest character number"
+		local lowest_id, winner = 99, nil
+		for _,pcol in ipairs(winners) do
+			if GD.game.players[pcol].character_id < lowest_id then winner = pcol end
+		end
+		winners = {winner}
+	end
+	--announce winner
+	local winner = winners[1]
+	local palaces = #GD.game.players[winner].placed_palaces
+	local txt = tostring(winner).." wins the game with "..tostring(palaces).." palaces."
+	if tie_breaker then txt = txt .." Tie breaker is "..tie_breaker end
+	broadcastToAll(txt)
+
+	--TODO: an end game dialog showing ranked players.
+	log("TODO: rank all players and show a dialog with final ranking")
+
 end
 
 --[[/////////////// Support functions /////////////////////]]
@@ -2425,9 +2459,9 @@ function scoreCity(city)
 end
 
 --[[ ******** TODO: sort on opp ************
-Bubble sort the route table.
+Bubble sort the route table from least expensive to most.
 Primary sort index is total cost for route
-TODO: use opp cost as secondary sort index
+TODO: use opp cost (when supplied) as secondary sort index
 ********************************]]
 function sortRoutes(pcol, opp)
 	if env.test.trace then log("sortRoutes() "..tostring(pcol)) end
@@ -3028,7 +3062,6 @@ function updateLockStates(pcol, state)
 			charactersLock(pcol, state)
 		end
 	end
-
 end
 
 --[[/////////////// External call functions /////////////////////]]

@@ -155,6 +155,7 @@ function enableExtraActionButtons()
   if env.test.trace then log(gid..": enableExtraActionButtons()") end
   GD.state.extra_action_UI_enabled = true
   enableDialButtons()
+  self.UI.setAttribute("extra_action_set_pnl","active",false)
   self.UI.setAttribute("extra_action_panel", "active", GD.state.extra_action_UI_enabled)
   --add the extra pointer if not present --TODO: is it ever present when this is called?  if not remove check
   local decals = self.getDecals()
@@ -274,6 +275,7 @@ function dialClick(player, btn, id)
   local pointer_id = ""
   if GD.state.extra_action then
     pointer_id = "pointer-extra"
+    self.UI.setAttribute("extra_action_set_pnl","active",true)
   elseif GD.state.click == 1 or GD.state.click == 0 then
     pointer_id = "pointer-1"
     GD.state.click = 2

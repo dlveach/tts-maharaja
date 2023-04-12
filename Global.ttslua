@@ -39,12 +39,14 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** BUGs ***
 
-	****BUG: don't allow any other action while route picker dialog is showing.  Disable everything until route selected (or canceled)
-	*BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too. (check is this still a bug?)
-	*BUG (maybe?) (SEE FIXES) not sure if character_id are updated to break ties when swap is final action before city scoring, TEST all scoring and tie breaker
+	**BUG character bank is not unlocked when player has to choose a replacement.
+	???BUG (maybe) after player has already taken turn, choosing replacement character should not give immediate bonus (coin, ext action, etc.).
+					City scoring however SHOULD be affected by Sadhus.   TEST this.
 
 *** Stuff that is done ***
 
+	***BUG character cards are going to the wrong spot in bank on exchange.
+	****BUG: FIXED TESTING don't allow any other action while route picker dialog is showing.  Disable everything until route selected (or canceled)
 	****BUG: FIXED TESTING when moving house from a village (and maybe city?) need to empty the node in pending action.  Restore it in undo.
 	****BUG: FIXED TESTING handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
 	****BUG: FIXED TESTING city snap back uses board rotation, need to add saved rotation in player placed houses and use it on snapBack for house drop
@@ -534,6 +536,7 @@ function replaceCharDialogBtn(player, btn, id)
 		return
 	end
 	if command == "done" then
+		charactersLock("all", true)
 		plr.character_id = pending_action.character_id
 		setCharacterBonus(player.color, false)
 		plr.replace_character = false
@@ -1241,7 +1244,6 @@ function characterDrop(pcol, obj)
 	elseif GD.game.stage == "player_turns" then
 		for _,a in ipairs(player.pending_actions) do
 			if a.key == "exchange" then
-				log("TESTING: characterDrop() prevent player from selecting multiple character tiles")
 				if GD.env.verbose then broadcastToColor("Character already selected", pcol) end
 				snapBack(obj)
 				return
@@ -1272,7 +1274,8 @@ function characterDrop(pcol, obj)
 			UI_setAttribute("replace_done_pnl","visibility",pcol)
 			UI_setAttribute("replace_undo_pnl","visibility",pcol)
 		else
-			local curr_guid = C.characters[player.character_id].g
+			local curr_id = player.character_id
+			local curr_guid = C.characters[curr_id].g
 			if curr_guid ~= obj.getGUID() then
 				local opponent = ""
 				local opp_char_id = -1
@@ -1289,7 +1292,7 @@ function characterDrop(pcol, obj)
 					key = "exchange",
 					player_color = pcol,
 					character_id = char_id,
-					old_char_id = player.character_id,
+					old_char_id = curr_id,
 					opponent = opponent,
 					opp_char_id = opp_char_id,
 					undo = {
@@ -1308,16 +1311,13 @@ function characterDrop(pcol, obj)
 					pending_action.undo.snapback.rot = opp_board.getRotation()
 				end
 				local turn_action = getAvailableAction(pcol, "exchange")
-				if not(turn_action) then
-					log("ERROR: characterDrop() unexpected: unable to locate unused exchange action for player "..tostring(pcol)) --DEBUG
-					snapBack(obj)
-				else
+				if turn_action then
 					player.character_id = char_id
 					setCharacterBonus(pcol)
 					pending_action.action_index = turn_action.index
 					local player_board = getObjectFromGUID(C.player_boards[pcol])
 					local current = getObjectFromGUID(curr_guid)
-					current.setPosition(C.characters[player.character_id].bank_pos)
+					current.setPosition(C.characters[curr_id].bank_pos)
 					current.setRotation(board.getRotation())
 					obj.setPositionSmooth(player_board.positionToWorld(C.player_board_character_location), false, true)
 					obj.setRotation(player_board.getRotation())
@@ -1330,6 +1330,9 @@ function characterDrop(pcol, obj)
 					if opponent == "" then txt = txt .. "with bank"
 					else txt = txt .. "with "..opponent end
 					if GD.env.verbose then printToAll(txt) end
+				else
+					log("ERROR: characterDrop() unexpected: unable to locate unused exchange action for player "..tostring(pcol)) --DEBUG
+					snapBack(obj)
 				end
 			end
 		end
@@ -1551,6 +1554,7 @@ function houseDrop(pcol, obj)
 					else
 						log("***ERROR: playerUndo() unable to clear house "..obj.getGUID().." from network node "..tostring(pending_action.undo.old_node))
 					end
+					updateCityScores()
 				elseif old_node.type == "village" then
 					if old_node.houses[1] and old_node.houses[1].g == obj.getGUID() then old_node.houses[1] = nil
 					elseif old_node.houses[2] and old_node.houses[2].g == obj.getGUID() then old_node.houses[2] = nil
@@ -2016,6 +2020,7 @@ function playerDone(pcol)
 		while #player.pending_actions > 0 do
 			local index = #player.pending_actions
 			local action = player.pending_actions[index]
+			if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end  --DEBUG
 			if action.key == "track" then
 				player.governor_clicked = false
 			elseif action.key == "gold" then
@@ -2067,7 +2072,6 @@ function playerDone(pcol)
 				log("*** ERROR: playerDone() unknown action key "..tostring(action.key)) --DEBUG
 				return
 			end
-			if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end  --DEBUG
 			table.remove(player.pending_actions, index)
 		end
 		endTurn(pcol)
@@ -2092,7 +2096,11 @@ function endTurn(pcol)
 	buildPoolLock(pcol, true)
 	placedHousesLock(pcol, true)
 	setGovernorButtons(false)
-	charactersLock(pcol, true)
+	if GD.game.wait_for_character_replace then
+		charactersLock("bank", false)
+	else
+		charactersLock(pcol, true)
+	end
 	--update round and check for end of round or end of game
 	local index = indexOf(GD.game.remaining_round_players,pcol)
 	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
@@ -2232,9 +2240,9 @@ function playerUndo(pcol)
 		--restore old node
 		local old_node = GD.network[action.undo.old_node]
 		if old_node.type == "city" then
-			table.insert(old_node.houses[color],obj.getGUID())
+			table.insert(old_node.houses[obj.getName()], obj.getGUID())
 		else
-			table.insert(old_node.houses,{g=obj.getGUID(),c=obj.getName()})
+			table.insert(old_node.houses,{g=obj.getGUID(), c=obj.getName()})
 		end
 		--remove from current node
 		local node = GD.network[action.undo.node_index]
@@ -2753,17 +2761,29 @@ end
 
 --[[ *****************************
 Set the locked state of all characters.
-If pcol supplied, skip it.
-Defaults to unlocked
+pcol: player color or "bank".  HACK: overloaded parameter
+	if pcol supplied, skip it.  Defaults to "none"
+	if == "bank" then only affect tiles in the bank.
+locked: Defaults to unlocked
 ********************************]]
 function charactersLock(pcol, locked)
 	locked = locked or false
 	pcol = pcol or "none"
-	if env.test.trace then log("charactersLock() player: "..tostring(pcol)..", locked = "..tostring(locked)) end
-	local player = getObjectFromGUID(pcol)
-	for id,char in ipairs(C.characters) do
-		if not(player) or player.character_id ~= id then
-			getObjectFromGUID(char.g).setLock(locked)
+	if env.test.trace then log("charactersLock() "..tostring(pcol)..", locked = "..tostring(locked)) end
+	if pcol == "bank" then
+		for id,char in ipairs(C.characters) do
+			local bank = true
+			for _,player in pairs(GD.game.players) do
+				if player.character_id == id then bank = false; break end
+			end
+			if bank then getObjectFromGUID(char.g).setLock(locked) end
+		end
+	else
+		local player = getObjectFromGUID(pcol)
+		for id,char in ipairs(C.characters) do
+			if not(player) or player.character_id ~= id then
+				getObjectFromGUID(char.g).setLock(locked)
+			end
 		end
 	end
 end

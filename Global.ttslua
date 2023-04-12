@@ -42,7 +42,7 @@
 
 *** OTHER STUFF ***
 
-	--TODO: ask player if free action should be used vs paid action. Better: make it clickable to signify preference?
+	--TODO: allow player to choose if free action should be used vs paid action. Idea: make it clickable to signify preference?
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
 	--TODO: add player prefs dialog.  So far, auto_select_zero_route is an option.  maybe auto_select_unique_cheapest_route
 	--TODO: (maybe) during action selection, don't show dial pointers until an action is clicked ??  (minor)
@@ -50,25 +50,27 @@
 	--TODO: (maybe) lock things (pool, placed houses etc.) after action if no more actions of that type.
 	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Takes too long to load.
 
-	--TODO: DONE TESTING refactored character bonus assignment.  messy.  check for bugs.
-	--TODO: DONE TESTING add verbose game prints for undo actions
-
 *** BUGs ***
 
-	****BUG: handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
-	****BUG: Handle more than 6 houses of a color in a city
-	*BUG (maybe?) game breaks if player picks up and drops multiple houses, palaces etc.  Limit count in onPickup?
+	****BUG: when moving house from a village (and maybe city?) need to empty the node in pending action.  Restore it in undo.
+	****BUG: don't allow any other action while route picker dialog is showing.  Disable everything until route selected (or canceled)
 	*BUG character free action does not show in dial UI until player turn starts.  Should be in action selection too. (check is this still a bug?)
 	*BUG (maybe?) (SEE FIXES) not sure if character_id are updated to break ties when swap is final action before city scoring, TEST all scoring and tie breaker
 
-*** FIXES IN TESTING ***
+*** Stuff that is done ***
 
+	****BUG: FIXED TESTING handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
+	****BUG: FIXED TESTING city snap back uses board rotation, need to add saved rotation in player placed houses and use it on snapBack for house drop
+	****BUG: FIXED TESTING Handle more than 6 houses of a color in a city
 	**BUG FIXED TESTING if 8 cities in route, last one is cut off in dialog button text
 	***BUG FIXED TESTING palaces are not locked after placing
 	**BUG; FIXED TESTING when building house in city, don't pick city/village option if city only is avaialbe in unused turn actions (see TODO on asking player)
 	***BUG: FIXED TESTING character free action not being removed from turn_actions on exchanging away Builder character
 	***BUG: FIXED TESTING replacing character does not immediately update benefit.  eg: replacing with Sadhus (#3) in a swap just before scoring
 	**BUG: FIXED TESTING Need to lock everything, disable track buttons, etc. when extra action is clicked.  Unlock when done to match turn actions.
+	--TODO: DONE TESTING refactored character bonus assignment.  messy.  check for bugs.
+	--TODO: DONE TESTING add verbose game prints for undo actions
+
 
 ==========================================================================================]]
 
@@ -83,8 +85,8 @@ env.test.auto_switch = true
 -- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
--- env.test.players = {"Green","Red",}
-env.test.players = {"Green","Red","Blue"}
+env.test.players = {"Green","Blue",}
+-- env.test.players = {"Green","Red","Blue"}
 
 env.game = {}
 env.game.fill_delay = 2
@@ -100,7 +102,7 @@ GD = {}
 TTS Game Load
 ********************************]]
 function onLoad(saved_data)
-	-- if true then return end
+	-- if true then return end --for testing global UI stuff
 	if env.test.force_fresh_save then saved_data = "" end
 	--Initialize stuff
 	if not(env.test.in_dev) then
@@ -451,10 +453,18 @@ function onObjectDrop(pcol, obj)
 					obj.setPosition(snap)
 					obj.setRotation(getObjectFromGUID(C.player_boards[obj.getName()]).getRotation())
 				else
-					snap = getPlacedObjectSnap(obj.getGUID())
-					assert(snap, "***ERROR: onObjectDrop() no snap position found")
-					obj.setPosition(snap)
-					obj.setRotation(board.getRotation())
+					if type == "house" then
+						local pos,rot = getPlacedObjectSnap(obj.getGUID())
+						assert(pos, "***ERROR: onObjectDrop() no snap position found for house")
+						if not(rot) then rot = board.getRotation() end
+						obj.setRotation(rot)
+						obj.setPosition(pos)
+					else
+						snap = getPlacedObjectSnap(obj.getGUID())
+						assert(snap, "***ERROR: onObjectDrop() no snap position found")
+						obj.setPosition(snap)
+						obj.setRotation(board.getRotation())
+					end
 				end
 			end
 			return
@@ -1147,7 +1157,7 @@ function setInitialPlacement(action)
 	local player = GD.game.players[action.player_color]
 	removeFromPlayerBoard(obj)
 	player.init_placements = player.init_placements - 1
-	player.placed_houses[obj.getGUID()] = obj.getPosition()
+	player.placed_houses[obj.getGUID()] = {pos=obj.getPosition(), rot=obj.getRotation()}
 	GD.game.players_init_placed = GD.game.players_init_placed + 1
 	if GD.game.players_init_placed == GD.game.player_count then
 		--reset for next round of placement until all 4 placed
@@ -1372,10 +1382,14 @@ function houseDrop(pcol, obj)
 	--[[TODO: document]]
 	local function snapBack(obj)
 		if env.test.trace then log("snapBack() "..tostring(obj)) end
-		local pos = getPlacedObjectSnap(obj.getGUID())
+		local pos,rot = getPlacedObjectSnap(obj.getGUID())
 		if pos then
 			obj.setPosition(pos)
-			obj.setRotation(getObjectFromGUID(C.board_guid).getRotation())
+			if rot then
+				obj.setRotation(rot)
+			else
+				obj.setRotation(getObjectFromGUID(C.board_guid).getRotation())
+			end
 		else
 			obj.setPosition(getPlayerBoardLocation(obj))
 			obj.setRotation(getObjectFromGUID(C.player_boards[color]).getRotation())
@@ -1401,16 +1415,20 @@ function houseDrop(pcol, obj)
 	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
 		if env.test.trace then log("placeCityHouse() "..tostring(obj)..", node "..tostring(node.id)) end
-		-- if env.test.debug then log(node) end
 		local color = obj.getName()
 		local center = GD.network[node.id].center
 		log(tostring(node.name).." center is "..tostring(center))
 		local index = #node.houses[color] + 1
-		log("TODO: handle more than 6 houses of a color in a city.  <-------------------")
+		--handle > 6 houses in a city for a color. Stack them.
+		local y = 1
+		if index > 18 then index = index - 18; y = 2.2
+		elseif index > 12 then index = index - 12; y = 1.7
+		elseif index > 6 then index = index - 6; y = 1.2
+		end
 		local offset = Vector(C.city_house_offsets[color][index].o)
 		local pos = Vector(center) - offset
 		local rot = Vector(C.city_house_offsets[color][index].r)
-		pos.y = 1.5
+		pos.y = y
 		obj.setRotationSmooth(rot, false, true)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
 		table.insert(node.houses[color],obj.getGUID())
@@ -1458,6 +1476,28 @@ function houseDrop(pcol, obj)
 		end
 	else
 		if node.type == "village" or node.type == "city" then
+			--check if obj already placed in location
+			if node.type == "city" then
+				log("TODO: check for drop city already placed <--------")
+				--check if guid is in each player color
+				for pcol,placed in pairs(node.houses) do
+					if indexOf(placed, obj.getGUID()) > 0 then
+						log("ignoring drop in same location already placed") --DEBUG LOGGING
+						snapBack(obj)
+						return
+					end
+				end
+			elseif node.type == "village" then
+				for _,e in ipairs(node.houses) do  --TODO: just use indexOf() here?
+					if e.g == obj.getGUID() then
+						log("ignoring drop in same location already placed") --DEBUG LOGGING
+						snapBack(obj)
+						return
+					end
+				end
+			else
+				snapBack(obj)
+			end
 			local pending_action = {
 				key = "move",
 				action_index = -1,
@@ -1468,12 +1508,11 @@ function houseDrop(pcol, obj)
 				undo = {
 					node_index = node_index,
 					guid = obj.getGUID(),
-					snapback = {
-						pos=getPlacedObjectSnap(obj.getGUID()),
-						rot=getObjectFromGUID(C.board_guid).getRotation()
-					},
+					snapback = {}
 				},
 			}
+			local pos,rot = getPlacedObjectSnap(obj.getGUID())
+			pending_action.undo.snapback = {pos=pos, rot=rot}
 			if not(pending_action.undo.snapback.pos) then --this house coming from player's pool
 				pending_action.undo.snapback.pos = getPlayerBoardLocation(obj)
 				pending_action.undo.snapback.rot = getObjectFromGUID(C.player_boards[pcol]).getRotation()
@@ -2025,12 +2064,13 @@ function playerDone(pcol)
 			elseif action.key == "quarry" then
 				--noop
 			elseif action.key == "move" then
-				log("TODO: finalize move action <---------------")
+				local obj = getObjectFromGUID(action.guid)
+				player.placed_houses[obj.getGUID()] = {pos=obj.getPosition(), rot=obj.getRotation(),}
 				placedHousesLock(pcol, false)
 			elseif action.key == "build" then
 				local obj = getObjectFromGUID(action.guid)
 				removeFromPlayerBoard(obj)
-				player.placed_houses[obj.getGUID()] = obj.getPosition()
+				player.placed_houses[obj.getGUID()] = {pos=obj.getPosition(), rot=obj.getRotation(),}
 				buildPoolLock(pcol, false)
 			elseif action.key == "architect" then
 				log("TODO: finalize architect action, noop?? <---------------")
@@ -2824,28 +2864,31 @@ function removeFromPlayerBoard(obj)
 end
 
 --[[ *****************************
-Search all players placed object lists for this guid.
-Return snap pos if any, nil if not.
---TODO: replace with list of placed guids for cheaper lookup?
+Search players placed object list for this guid.
+Use obj.memo to determine type, return snap for type.
+Return snap pos for obj guid if found
+For placed houses, a tuple of pos,rot is returned
+Returns nil if nothing found for guid matching type.
 ********************************]]
 function getPlacedObjectSnap(guid)
 	if env.test.trace then log("getPlacedObjectSnap()") end
 	local obj = getObjectFromGUID(guid)
 	assert(obj, "***ERROR: getPlacedObjectSnap() unable to get object ref")
 	for _,pcol in ipairs(GD.game.player_order) do
-		local list = {}
+		local player = GD.game.players[pcol]
 		if obj.memo == "house" then
-			list = GD.game.players[pcol].placed_houses
+			if player.placed_houses[guid] then
+				local snap = player.placed_houses[guid]
+				return snap.pos, snap.rot
+			end
 		elseif obj.memo == "palace" then
-			list = GD.game.players[pcol].placed_palaces
+			return player.placed_palaces[guid]
 		elseif obj.memo == "architect" then
 			if obj.getName() == pcol then
 				return GD.game.players[pcol].architect_location.snap_pos
 			end
 		end
-		if list[guid] then return list[guid] end
 	end
-	return nil
 end
 
 --[[ *****************************

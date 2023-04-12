@@ -5,6 +5,10 @@ C = {}
 C.board_guid = "d78f46"
 C.maharaja_guid = "7fbea9"
 
+C.palace_object_guid = "bbecff"
+-- C.house_object_guid = "e3f2ba"
+C.house_object_guid = "1b0112"
+
 C.table_colors = {"Purple","Blue","Green","Red","Yellow",} --clockwise
 
 C.city_payouts = {
@@ -46,9 +50,6 @@ C.action_dials = {
   Blue = "7ed61c",
   Purple = "94b54e",
 }
-
-C.palace_object_guid = "bbecff"
-C.house_object_guid = "e3f2ba"
 
 C.object_color_tints = {
   Yellow = {r = 1, g = 1, b = 0},

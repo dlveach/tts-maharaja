@@ -178,14 +178,13 @@ function restoreGameState()
 	if GD.game.stage == "setup" then
 		log("TODO: any game restore in setup stage? <----------------")
 	else
-		log("TESTING: Restoring game state in game play stages <-------------")
 		setupGlobalUI()
 		updateGovernorTrack()
 		for pcol,player in pairs(GD.game.players) do
 			updateDialUI(pcol)
 		end
+		setGovernorButtons(GD.state.governor_buttons)
 	end
-
 	Wait.time(function()
 		--[[ replay saved global UI setAttributes --]]
 		if env.test.debug then log("replay saved global UI setAttributes") end
@@ -197,7 +196,6 @@ function restoreGameState()
 	      log("ERROR: restoreGameState(): Unable to setAttribute for global UI "..field.." on id "..id.." to "..tostring(value))
 	    end
 	  end
-
 		--[[ replay saved board UI setAttributes --]]
 	  if env.test.debug then log("replay saved board UI setAttributes") end
 	  local board = getObjectFromGUID(C.board_guid)
@@ -211,6 +209,7 @@ function restoreGameState()
 	  end
 		UI.setAttribute("status_info","visibility",GD.game.status_visibility)
 		UI.setAttribute("restore_dialog_pnl","active",false)
+		-- if GD.game.stage == "player_turns" then setGovernorButtons(GD.state.governor_buttons) end
 	end, 1)
 end
 
@@ -243,22 +242,6 @@ function board_UI_setAttribute(id, field, value)
 end
 
 --[[/////////////// Event handlers /////////////////]]
-
---[[ *****************************
-TODO: Thinking about these
-********************************]]
-function mouseOverCity(arg)
-	log("mouse over")
-	log(arg)
-end
-function mouseExitCity(arg)
-	log("mouse exit")
-	log(arg)
-end
-function mouseClickCity(arg)
-	log("mouse click city")
-	log(arg)
-end
 
 --[[ *****************************
 Setup: Handler for start game options
@@ -297,6 +280,7 @@ Player clicked a row on the Governor track
 ********************************]]
 function governorClick(player, btn, id)
 	if env.test.trace then log("governorClick() "..player.color..", id: "..tostring(id)) end
+	if GD.game.select_route_dialog then log("Ignoring: route selection dialog open"); return end
 	if player.color ~= GD.game.current_player_color then return end
 	if GD.game.players[player.color].governor_clicked then return end --guard double clicks
 	GD.game.players[player.color].governor_clicked = true
@@ -311,7 +295,7 @@ function governorClick(player, btn, id)
 			restore_list = simpleDeepCopy(track),
 		}
 	}
-	local turn_action = getAvailableAction(pcol, "track")
+	local turn_action = getAvailableAction(player.color, "track")
 	if not(turn_action) then
 		log("***ERROR: governorClick() could not locate a turn action") --DEBUG
 	else
@@ -427,8 +411,8 @@ function onObjectDrop(pcol, obj)
 	  elseif pos.z > center.z + (size.z/2) then snapback = true
 	  elseif pos.z < center.z - (size.z/2) then snapback = true
 		end
+		if GD.game.select_route_dialog then log("Ignoring: route selection dialog open"); snapback = true end
 		if snapback then
-			--TODO: consider use a global array of GD.snaps for placed objects?  Use player board home loc if not in that list?
 			if type == "architect" then
 				local snap = getPlacedObjectSnap(obj.getGUID())
 				assert(snap, "***ERROR: onObjectDrop() no snap position found")
@@ -474,6 +458,7 @@ Enable extra action selection on the player dial.
 ********************************]]
 function extraActionToken(obj, pcol, rclick)
 	if env.test.trace then log("extraActionToken() "..obj.getName()..", "..pcol..", "..tostring(rclick)) end
+	if GD.game.select_route_dialog then log("Ignoring: route selection dialog open"); return end
 	if pcol ~= obj.getName() then return end
 	--enable extra action selection on player dial and disable Done/Undo buttons
 	local player = GD.game.players[pcol]
@@ -647,6 +632,7 @@ function routeSelectClick(player, btn, id)
 		getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true, undo=true})
 	end
 	UI_setAttribute("routes_dialog_pnl","active",false)
+	GD.game.select_route_dialog = false
 end
 
 --[[/////////////// Game Setup /////////////////////]]
@@ -1227,10 +1213,8 @@ function characterDrop(pcol, obj)
 		return
 	end
 	--/////////////////////////////////
-	if pcol ~= GD.game.current_player_color and not(player.replace_character) then
-		snapBack(obj)
-		return
-	end
+	if GD.game.select_route_dialog then log("Ignoring: route selection dialog open"); snapBack(obj); return end
+	if pcol ~= GD.game.current_player_color and not(player.replace_character) then snapBack(obj) return end
 	if GD.game.stage == "select_starting_characters" then
 		if #GD.game.players[pcol].pending_actions > 0 then
 			if GD.env.verbose then broadcastToColor("Character already selected", pcol) end
@@ -1765,11 +1749,6 @@ function architectDrop(pcol, obj)
 		route.costs = simpleDeepCopy(costs)
 		table.insert(routes,simpleDeepCopy(route))
 	end
-	-- if env.test.debug then
-	-- 	log("routes discovered:")
-	-- 	log(routes)
-	-- end
-	-- prune too expensive (total cost > player gold), if all are too expensive then snapback & warn
 	local tmp = {}
 	for i,route in ipairs(routes) do
 		if route.total_cost <= player.gold then
@@ -1873,6 +1852,7 @@ function architectDrop(pcol, obj)
 		-- end
 		table.insert(player.pending_actions, pending_action)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
+		GD.game.select_route_dialog = true
 		updateRouteDialog(pcol)
 	end
 end
@@ -2053,6 +2033,10 @@ function playerDone(pcol)
 					UI_setAttribute("replace_character_txt","text",action.opponent)
 					UI_setAttribute("replace_character_txt","color",action.opponent)
 					UI_setAttribute("replace_character_pnl","active",true)
+				end
+				if player.character_id == 3 then
+					updateCityScores()
+					updateStatusPanel()
 				end
 			elseif action.key == "palace" then
 				table.insert(player.placed_palaces, action.guid)
@@ -2560,7 +2544,7 @@ function sortRoutes(pcol, opp)
 end
 
 --[[ *****************************
-Update the route dialog with latest route table for player
+Update the route dialog with latest route table for player and display it
 ********************************]]
 function updateRouteDialog(pcol)
 	if env.test.trace then log("updateRouteDialog() "..tostring(pcol)) end
@@ -3067,6 +3051,7 @@ function setGovernorButtons(on)
 		end
 	end
 	Wait.frames(function() reloadUI(C.board_guid) end, 60)
+	GD.state.governor_buttons = on
 end
 
 --[[ *****************************

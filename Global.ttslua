@@ -24,9 +24,9 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** OTHER STUFF ***
 
-	--TODO: allow player to choose if free action should be used vs paid action. Idea: make it clickable to signify preference?
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
 	--TODO: add player prefs dialog.  So far, auto_select_zero_route is an option.  maybe auto_select_unique_cheapest_route
+
 	--TODO: (maybe) during action selection, don't show dial pointers until an action is clicked ??  (minor)
 	--TODO: (maybe) unlock only last house in pool (and last palace).  Check after each drop, unlock another if more actions.
 	--TODO: (maybe) lock things (pool, placed houses etc.) after action if no more actions of that type.
@@ -39,12 +39,13 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** BUGs ***
 
-	???BUG: duplicates in player.placed_palaces table.  phantom palace in city node.  Think maybe artifact of testing but not sure.  Watch for this.
-	???BUG after player has already taken turn, choosing replacement character should not give immediate bonus (coin, ext action, etc.).
+	???BUG: (replicate?) duplicates in player.placed_palaces table.  phantom palace in city node.  Think maybe artifact of testing but not sure.  Watch for this.
+	???BUG: (replicate?) after player has already taken turn, choosing replacement character should not give immediate bonus (coin, ext action, etc.).
 					City scoring however SHOULD be affected by Sadhus.   TEST this.
 
 *** Stuff that is done ***
 
+	*****BUG: FIXED TESTING Free action needs to either a move or a build.  Currently just a move.
 	**BUG FIXED TESTING character bank is not unlocked when player has to choose a replacement.
 	***BUG character cards are going to the wrong spot in bank on exchange.
 	****BUG: FIXED TESTING don't allow any other action while route picker dialog is showing.  Disable everything until route selected (or canceled)
@@ -61,6 +62,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 	--TODO: DONE TESTING refactored character bonus assignment.  messy.  check for bugs.
 	--TODO: DONE TESTING add verbose game prints for undo actions
 	--TODO: DONE TESTING final scoring dialog
+	--TODO: DONE TESTING allow player to choose if free action should be used vs paid action. Idea: make it clickable to signify preference?
 
 ==========================================================================================]]
 
@@ -484,11 +486,10 @@ function penaltyDialogBtn(player, btn, id)
 	if env.test.debug then log("action is "..tostring(command)) end
 	if command == "ok" then
 		for _,action in ipairs(GD.game.players[player.color].turn_actions) do
-			if not(action.free) and action.status ~= "Done" then action.status = "Failed" end
+			if action.status ~= "Done" then action.status = "Failed" end
 		end
 		updateDialUI(player.color)
 		playerDone(player.color)
-		-- endTurn(player.color)
 	elseif command == "cancel" then
 		--noop
 	else
@@ -636,6 +637,13 @@ function routeSelectClick(player, btn, id)
 	end
 	UI_setAttribute("routes_dialog_pnl","active",false)
 	GD.game.select_route_dialog = false
+end
+
+function freeActionBtnClick(player, btn, id)
+	if env.test.trace then log("freeActionBtnClick(): id="..tostring(id)) end
+	if player.color ~= GD.game.current_player_color then return end
+	GD.game.players[player.color].prefer_free_action = not(GD.game.players[player.color].prefer_free_action)
+	updateDialUI(player.color)
 end
 
 --[[/////////////// Game Setup /////////////////////]]
@@ -870,6 +878,8 @@ function setupPlayers()
 		player.turn_actions = {}
 		player.pending_actions = {}
 		player.actions_set = false
+		player.free_action = nil
+		player.prefer_free_action = false
 		player.pointers = {}
 		player.prefs = {}
 		player.prefs.auto_select_zero_route = env.game.auto_select_zero_route
@@ -1172,17 +1182,17 @@ function beginNextRound()
 		player.actions_set = false
 		player.turn_actions = {}
 		player.pointers = {}
-
-		--TODO: is this needed here if the fn is being changed to handle character changes?
-		setCharacterBonus(pcol, false)
-
+		if player.free_action then
+			player.free_action.status = ""
+			updateDialUI(pcol)
+		end
+		setCharacterBonus(pcol, false)   --TODO: is this needed here?
 		local dial = getObjectFromGUID(C.action_dials[pcol])
 		dial.call("reset")
 		dial.call("enableDialButtons")
 		dial.call("hideMe")
 		if dial.is_face_down then dial.call("flipMe") end
-
-		local txt = "Secretly choose turn actions and confirm with Done.\n"
+		local txt = "Secretly choose turn actions and confirm with Done.\n"  --TODO: make a constant?
 		txt = txt .. "Player turns will begin once all have confirmed.\n"
 		txt = txt .. "Until then selections can be modified."
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,done=false,undo=false,help_text=txt})
@@ -1438,8 +1448,7 @@ function houseDrop(pcol, obj)
 					}
 				},
 			}
-			--show done and undo buttons
-			log(pending_action)
+			log(pending_action)																																--DEBUG LOGGING
 			table.insert(player.pending_actions, pending_action)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 		elseif node.type == "city" then
@@ -1451,11 +1460,9 @@ function houseDrop(pcol, obj)
 		if node.type == "village" or node.type == "city" then
 			--check if obj already placed in location
 			if node.type == "city" then
-				log("TODO: check for drop city already placed <--------")
-				--check if guid is in each player color
 				for pcol,placed in pairs(node.houses) do
 					if indexOf(placed, obj.getGUID()) > 0 then
-						log("ignoring drop in same location already placed") --DEBUG LOGGING
+						log("ignoring drop in same location already placed") 													--DEBUG LOGGING
 						snapBack(obj)
 						return
 					end
@@ -1463,7 +1470,7 @@ function houseDrop(pcol, obj)
 			elseif node.type == "village" then
 				for _,e in ipairs(node.houses) do  --TODO: just use indexOf() here?
 					if e.g == obj.getGUID() then
-						log("ignoring drop in same location already placed") --DEBUG LOGGING
+						log("ignoring drop in same location already placed") 													--DEBUG LOGGING
 						snapBack(obj)
 						return
 					end
@@ -1474,7 +1481,7 @@ function houseDrop(pcol, obj)
 			local pending_action = {
 				key = "move",
 				action_index = -1,
-				free_action = false,
+				is_free = false,
 				location = node.type,
 				player_color = pcol,
 				guid = obj.getGUID(),
@@ -1500,13 +1507,13 @@ function houseDrop(pcol, obj)
 			end
 			if turn_action then
 				pending_action.action_index = turn_action.index
-				pending_action.free_action = (turn_action.pointer_id == "")
+				pending_action.is_free = (turn_action.id == "free")
 			else
 				snapBack(obj)
 				if GD.env.verbose then broadcastToColor("No more "..pending_action.key.." actions", pcol) end
 				return
 			end
-			if not(pending_action.free_action) and pending_action.key == "build" and player.gold < 1 then
+			if not(pending_action.is_free) and pending_action.key == "build" and player.gold < 1 then
 				snapBack(obj)
 				if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
 				return
@@ -1536,7 +1543,7 @@ function houseDrop(pcol, obj)
 				end
 			end
 			if pending_action.key == "build" then
-				if pending_action.free_action then
+				if pending_action.is_free then
 					if GD.env.verbose then printToAll(pcol.." builds a house for free") end
 				else
 					player.gold = player.gold - 1
@@ -1868,9 +1875,7 @@ function startPlayerTurn(pcol)
 	if env.test.trace then log("startPlayerTurn() for player "..tostring(pcol)) end
 	local player = GD.game.players[pcol]
 	assert(player,"Failed to locate player for color "..tostring(pcol))
-	-- player.failed_actions = false
 	player.pending_actions = {}
-	player.free_action = false	--TODO: FIX free_action
 	if GD.env.verbose then printToAll("Starting turn for player "..pcol) end
 	local dial = getObjectFromGUID(C.action_dials[pcol])
 	Wait.condition(
@@ -1882,8 +1887,6 @@ function startPlayerTurn(pcol)
 		end,
 		function() return(dial.resting) end, 5) --HACK: might be flipping from lock actions call so wait
 	getObjectFromGUID(C.player_pawns[pcol]).setLock(false)
-
-	--TODO: use setCharacterBonus() here?  overkill but this is (mostly) duplicated there
 	--set and/or execute bonus of character tile
 	if player.character_bonus == "+1_extra_action" then
 			player.extra_actions = player.extra_actions + 1
@@ -1894,7 +1897,6 @@ function startPlayerTurn(pcol)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 			if GD.env.verbose then printToAll(pcol.." +1 gold for the Trader") end
 	end
-
 	--execute any immediate turn actions, set pawn, house, palace lock state based on actions selected
 	local palace,pool,move,track,char = false,false,false,false,false
 	for _,action in pairs(player.turn_actions) do
@@ -1915,13 +1917,13 @@ function startPlayerTurn(pcol)
 				updateDialUI(pcol)
 			end
 		elseif action.id == "palace" then palace = true
-		elseif action.id == "build" or action.free then pool = true
-		elseif action.id == "move" or action.free then move = true
+		elseif action.id == "build" then pool = true
+		elseif action.id == "move" then move = true
 		elseif action.id == "track" then track = true
 		elseif action.id == "exchange" then char = true
 		end
 	end
-	if player.free_action then pool,move = true,true end   --TODO: use updateLockStates() here?
+	if player.free_action then pool,move = true,true end
 	if palace then unplayedPalacesLock(pcol, false) end
 	if pool then buildPoolLock(pcol, false) end
 	if move then placedHousesLock(pcol, false) end
@@ -1967,20 +1969,14 @@ function playerDone(pcol)
 		table.remove(player.pending_actions, 1)
 	elseif GD.game.stage == "select_actions" then  --Done during action selection
 		if player.choosing_extra_action then
-
-			--TODO: extra action STUFF
-
 			setExtraAction(pcol)
 		else
 			log("Player clicked Done during action selection")   --TODO: LOGGING
 			player.actions_set = true
-			--TODO: BUG: use a flag on players when actions are set vs. checking pointers in for loop
-			log("Checking to see if all have set")
 			local all_set = true
 			for _,pdata in pairs(GD.game.players) do
 				if not(pdata.actions_set) then all_set = false; break end
 			end
-			log("all_set is "..tostring(all_set))
 			if all_set then
 				broadcastToAll("All players have set actions, starting player turns")
 				for _,pcol in ipairs(GD.game.player_order) do
@@ -2142,13 +2138,16 @@ TODO: add verbose prints of what action is undone
 ********************************]]
 function playerUndo(pcol)
 	if env.test.trace then log("playerUndo(): "..pcol) end
+	local player = GD.game.players[pcol]
 	local function resetAction(pcol, action)
-		for _,a in pairs(GD.game.players[pcol].turn_actions) do				--TODO: if a.index always matches array index, is loop necessary?  Because of free action?
-			if a.free and action.free_action then a.status = ""; break
-			elseif a.index == action.action_index then a.status = ""; break end
+		if action.is_free then           --TODO: discreet free build/move action
+			player.free_action.status = ""
+		else
+			for _,a in pairs(GD.game.players[pcol].turn_actions) do		--TODO: if a.index always matches turn_actions array index, is loop necessary? not sure it always does.
+				if a.index == action.action_index then a.status = ""; break end
+			end
 		end
 	end
-	local player = GD.game.players[pcol]
 	local actions = player.pending_actions
 	if #actions == 0 then return end
 	local action = actions[#actions]
@@ -2204,7 +2203,7 @@ function playerUndo(pcol)
 			end
 		end
 		resetAction(pcol, action)
-		if not(action.free_action) then
+		if not(action.is_free) then
 			player.gold = player.gold + 1
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
 		end
@@ -2605,7 +2604,7 @@ execute: if true then any immediate character bonuse is executed.
 ********************************]]
 function setCharacterBonus(pcol, execute)
 	if execute == nil then execute = true end
-	if env.test.trace then log("setCharacterBonus() execute: "..tostring(execute)) end
+	if env.test.trace then log("setCharacterBonus() "..tostring(pcol)..", execute: "..tostring(execute)) end
 	local player = GD.game.players[pcol]
 	assert(player.character_id and player.character_id > 0 and player.character_id <= 7, "***ERROR: setCharacterBonus(): Invalid character id")
 	player.character_bonus = nil
@@ -2619,26 +2618,22 @@ function setCharacterBonus(pcol, execute)
 	end
 	if player.character_id == 6 then player.character_bonus = "build_palace_discount" end
 	if player.character_id == 5 then
-		local has_free_action = false
-		for _,a in ipairs(player.turn_actions) do
-			if a.free then has_free_action = true; break end
+		if not(player.free_action) then
+			player.free_action = {
+				id="free",
+		    label="Free Build/Move House",
+				status = "",
+				pointer_id = "", --TODO: get rid of this?
+				free = true,  --TODO: get rid of this?
+			}
 		end
-		if not(has_free_action) then --TODO: is this check necessary?  Is there a scenario player had it, then gets it back? Possibly.
-			local action = simpleDeepCopy(C.dial_actions[9].actions[1])  --TODO: setting up the action could be cleaner
-			action.status = ""
-			action.pointer_id = ""
-			action.free = true
-			table.insert(player.turn_actions,action)
+		if execute then
+			buildPoolLock(pcol, false)
+			placedHousesLock(pcol, false)
 		end
-		buildPoolLock(pcol, false)
 		player.character_bonus = "free_build_move"
 	else
-		--remove the free action if any
-		local temp = {}
-		for _,a in ipairs(player.turn_actions) do
-			if not(a.free) then table.insert(temp, a) end
-		end
-		player.turn_actions = temp
+		player.free_action = nil
 	end
 	if player.character_id == 4 then player.character_bonus = "free_travel" end
 	if player.character_id == 3 then player.character_bonus = "outer_palace_scoring" end
@@ -2655,7 +2650,6 @@ function setCharacterBonus(pcol, execute)
 	txt = txt.."All required actions must be executed.\n"
 	txt = txt..C.character_bonus_descriptions[player.character_id]
 	getObjectFromGUID(C.player_boards[pcol]).call("setState",{help_text=txt})
-
 	updateDialUI(pcol)
 end
 
@@ -2665,7 +2659,7 @@ TODO: need this in a fn?
 function failedActions(pcol)
 	if env.test.trace then log("failedActions() "..tostring(pcol)) end
 	for _,action in ipairs(GD.game.players[pcol].turn_actions) do
-		if not(action.free) and action.status == "Failed" then return true end
+		if action.status == "Failed" then return true end
 	end
 	return false
 end
@@ -2677,7 +2671,7 @@ Return true if any, false if not.
 function hasRequiredActions(pcol)
 	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)) end
 	for id,action in pairs(GD.game.players[pcol].turn_actions) do
-		if not(action.free) and action.status == "" then return true end
+		if action.status == "" then return true end
 	end
 	return false
 end
@@ -2690,43 +2684,29 @@ Return reference to a player turn action.  Nil if none found.
 ********************************]]
 function getAvailableAction(pcol, key, village)
 	local village = village or false
-	if env.test.trace then log("getAvailableAction() "..tostring(pcol)..", key: "..tostring(key)..", city: "..tostring(city)) end
-	if key == "build" and village then
-		--must be a city/village build action, avoid free if possible
-		for id,action in pairs(GD.game.players[pcol].turn_actions) do
-			if action.id == key and action.status == "" and not(action.city_required) and not(action.free) then
-				return action
+	if env.test.trace then log("getAvailableAction() "..tostring(pcol)..", key: "..tostring(key)..", village: "..tostring(village)) end
+	local player = GD.game.players[pcol]
+	if key == "build" or key == "move" then
+		if player.prefer_free_action and player.free_action and player.free_action.status == "" then
+			return player.free_action
+		else
+			if key == "build" and village then
+				for _,action in ipairs(player.turn_actions) do
+					if action.id == key and action.status == "" and not(action.city_required) then return action end
+				end
+			elseif key == "build" and not(village) then
+				for _,action in ipairs(player.turn_actions) do
+					if action.id == key and action.status == "" and action.city_required then return action end
+				end
+				for _,action in ipairs(player.turn_actions) do
+					if action.id == key and action.status == "" then return action end
+				end
 			end
+			if player.free_action and player.free_action.status == "" then return player.free_action end
 		end
-		for id,action in pairs(GD.game.players[pcol].turn_actions) do
-			if action.id == key and action.status == "" and not(action.city_required) then
-				return action
-			end
-		end
-	elseif key == "build" then
-		--look for a city only build action first, then look for city/village
-		for id,action in pairs(GD.game.players[pcol].turn_actions) do
-			if action.id == key and action.status == "" and action.city_required then
-				return action
-			end
-		end
-		--find any build action, avoid free if possible
-		for id,action in pairs(GD.game.players[pcol].turn_actions) do
-			if action.id == key and action.status == "" and not(action.free) then
-				return action
-			end
-		end
-		for id,action in pairs(GD.game.players[pcol].turn_actions) do
-			if action.id == key and action.status == "" then
-				return action
-			end
-		end
-	else
-		--not a build, find any available action matching key
-		for id,action in pairs(GD.game.players[pcol].turn_actions) do
-			if action.id == key and action.status == "" then
-				return action
-			end
+	else --just search for a matching key that is available
+		for _,action in ipairs(player.turn_actions) do
+			if action.id == key and action.status == "" then return action end
 		end
 	end
 	return nil
@@ -3088,20 +3068,11 @@ function updateDialUI(pcol)
 	if env.test.trace then log("updateDialUI() "..tostring(pcol)) end
 	local player = GD.game.players[pcol]
 	local dial = getObjectFromGUID(C.action_dials[pcol])
-	for i=1,7 do
+	for i=1,6 do
 		dial.UI.setAttribute("row_action_"..tostring(i),"active",false)
 	end
 	local row = 0
 	for _,action in ipairs(player.turn_actions) do
-		if action.free then
-			dial.UI.setAttribute("action_text_7", "text", action.label)
-			dial.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
-			dial.UI.setAttribute("row_action_7", "active", true)
-			dial.UI.setAttribute("status_text_7", "text", action.status)
-			if action.status == "Done" then
-				dial.UI.setAttribute("action_text_7", "color", "Gray")
-			end
-		else
 			row = row + 1
 			dial.UI.setAttribute("action_text_"..tostring(row), "text", action.label)
 			dial.UI.setAttribute("action_text_"..tostring(row), "color", "rgb(1,1,0)")
@@ -3113,7 +3084,29 @@ function updateDialUI(pcol)
 				dial.UI.setAttribute("action_text_"..tostring(row), "color", "Gray")
 				dial.UI.setAttribute("status_text_"..tostring(row), "color", "Red")
 			end
+	end
+	--TODO: change '_7' to '_free' in xml ids
+	if player.free_action then
+		dial.UI.setAttribute("action_text_7", "text", "Build/Move a house for free")  --TODO: don't need?
+		dial.UI.setAttribute("action_text_7", "color", "rgb(1,1,0)")
+		dial.UI.setAttribute("row_action_7", "active", true)
+		if player.free_action.status == "" then
+			if player.prefer_free_action then
+				dial.UI.setAttribute("free_action_btn_txt", "text", "Use First")
+			else
+				dial.UI.setAttribute("free_action_btn_txt", "text", "Use Last")
+			end
+			dial.UI.setAttribute("free_action_btn", "active", true)
+			dial.UI.setAttribute("status_text_7", "text", "")   --TODO: don't need?
+			dial.UI.setAttribute("status_text_7", "active", false)
+		else
+			dial.UI.setAttribute("free_action_btn", "active", false)
+			dial.UI.setAttribute("status_text_7", "active", true)
+			dial.UI.setAttribute("status_text_7", "text", "Done")   --TODO: don't need?
+			dial.UI.setAttribute("action_text_7", "color", "Gray")
 		end
+	else
+		dial.UI.setAttribute("row_action_7", "active", false)
 	end
 end
 
@@ -3236,7 +3229,6 @@ function addDialAction(params)
 	local pointer_id = params.pointer_id
 	assert(pointer_id, "***ERROR addDialAction(): missing pointer_id param")
 	local player = GD.game.players[pcol]
-
 	--remove any previous entries for this pointer id
 	local temp = simpleDeepCopy(player.turn_actions)
 	player.turn_actions = {}
@@ -3246,14 +3238,12 @@ function addDialAction(params)
 			table.insert(player.turn_actions, a)
 		end
 	end
-
 	--add new actions for this dial index
 	for _,a in ipairs(C.dial_actions[dial_index].actions) do
 		local action = simpleDeepCopy(a)
 		action.index = #player.turn_actions + 1
 		action.status = ""
 		action.pointer_id = pointer_id
-		action.free = false  		--TODO: pick one
 		table.insert(player.turn_actions,action)
 	end
 	player.pointers[pointer_id] = true

@@ -48,6 +48,13 @@
     image="Sprites/Layout/Button"
     color="Blue" />
 
+  <Button class="freeActionButton"
+    hoverClass="hover"
+    pressClass="press"
+    selectClass="select"
+    onClick="Global/freeActionBtnClick"
+    image="Sprites/Layout/Button"
+    color="Blue" />
 
   <Button class="hover"
         color="Cyan" />
@@ -183,8 +190,11 @@
         </Cell>
       </Row>
       <Row id="row_action_7" preferredHeight="30" active="false">
-        <Cell padding="0 0 0 0">
-          <Text id="status_text_7" fontSize="16" text="Free"/>
+        <Cell padding="10 10 0 0">
+          <Button id="free_action_btn" class="freeActionButton">
+            <Text id="free_action_btn_txt" fontSize="12" text="Free"/>
+          </Button>
+          <Text id="status_text_7" fontSize="16" text="Done" active="false"/>
         </Cell>
         <Cell padding="0 0 0 0">
           <Text id="action_text_7" class="actionText" text="Build/Move a house for free"/>

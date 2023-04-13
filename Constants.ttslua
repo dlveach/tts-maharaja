@@ -206,7 +206,7 @@ C.city_pawn_offsets = {
 }
 
 --player defaults
-C.player_data = {
+C.player_data = {   --TODO: duplicated in setupPlayers().  Just do it all there.
   quarry = {},
   pool = {},
   palaces = {},
@@ -215,7 +215,7 @@ C.player_data = {
   gold = 0,
   extra_actions = 0,
   character_id = -1,
-  has_actions = false,    --TODO: FIX has_actions  Look at this.  Maybe use turn_actions instead?
+  has_actions = false,
   pending_actions = {},
   turn_actions = {},
   status_panel = true,
@@ -280,10 +280,16 @@ C.dial_actions = {
       {id="build",label="Build a House (City/Village)",},
     },
   },
-  {
-    id="free",
-    actions = {
-      {id="free-build-move",label="Free Build/Move House (City/Village)",},
-    },
-  },
+  -- {
+  --   id="free",
+  --   actions = {
+  --     {id="free-build-move",label="Free Build/Move House (City/Village)",},
+  --   },
+  -- },
 }
+
+-- C.free_action = {
+--     id="free",
+--     label="Free Build/Move House",
+--   }
+--

@@ -39,12 +39,13 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** BUGs ***
 
-	**BUG character bank is not unlocked when player has to choose a replacement.
-	???BUG (maybe) after player has already taken turn, choosing replacement character should not give immediate bonus (coin, ext action, etc.).
+	???BUG: duplicates in player.placed_palaces table.  phantom palace in city node.  Think maybe artifact of testing but not sure.  Watch for this.
+	???BUG after player has already taken turn, choosing replacement character should not give immediate bonus (coin, ext action, etc.).
 					City scoring however SHOULD be affected by Sadhus.   TEST this.
 
 *** Stuff that is done ***
 
+	**BUG FIXED TESTING character bank is not unlocked when player has to choose a replacement.
 	***BUG character cards are going to the wrong spot in bank on exchange.
 	****BUG: FIXED TESTING don't allow any other action while route picker dialog is showing.  Disable everything until route selected (or canceled)
 	****BUG: FIXED TESTING when moving house from a village (and maybe city?) need to empty the node in pending action.  Restore it in undo.
@@ -59,6 +60,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 	**BUG: FIXED TESTING Need to lock everything, disable track buttons, etc. when extra action is clicked.  Unlock when done to match turn actions.
 	--TODO: DONE TESTING refactored character bonus assignment.  messy.  check for bugs.
 	--TODO: DONE TESTING add verbose game prints for undo actions
+	--TODO: DONE TESTING final scoring dialog
 
 ==========================================================================================]]
 
@@ -177,9 +179,7 @@ TODO: implement
 function restoreGameState()
 	if env.test.trace then log("restoreGameState()") end
 	log("TESTING: restoreGameState()")
-	if GD.game.stage == "setup" then
-		log("TODO: any game restore in setup stage? <----------------")
-	else
+	if GD.game.stage ~= "setup" then
 		setupGlobalUI()
 		updateGovernorTrack()
 		for pcol,player in pairs(GD.game.players) do
@@ -1938,7 +1938,6 @@ function startPlayerTurn(pcol)
 		state.extra_actions = GD.game.players[p].extra_actions
 		state.extra_button = state.active and state.extra_actions > 0
 		state.help_txt = txt..C.character_bonus_descriptions[player.character_id]
-		-- getObjectFromGUID(C.player_boards[p]).call("setState",{active=active,done=active,undo=false,help_text=help_txt,extra_actions=extra_actions, extra_button=extra_button})
 		getObjectFromGUID(C.player_boards[p]).call("setState",state)
 	end
 end
@@ -2435,8 +2434,20 @@ function endGame()
 	local txt = tostring(winner).." wins the game with "..tostring(palaces).." palaces."
 	if tie_breaker then txt = txt .." Tie breaker is "..tie_breaker end
 	broadcastToAll(txt)
+	UI.setAttribute("end_game_winner_txt","text",tostring(winner))
+	UI.setAttribute("end_game_winner_txt","color",tostring(winner))
+	UI.setAttribute("end_game_pnl","active",true)
 
-	--TODO: an end game dialog showing ranked players.
+	--disable all buttons, everything
+	for _,pcol in ipairs(GD.game.player_order) do
+		getObjectFromGUID(C.player_boards[pcol]).call("setState", {active=false,done=false,undo=false,extra_button=false,})
+		buildPoolLock(pcol, true)
+		unplayedPalacesLock(pcol, true)
+		placedHousesLock(pcol, true)
+	end
+	charactersLock("all", true)
+	setGovernorButtons(false)
+
 	log("TODO: rank all players and show a dialog with final ranking")
 
 end
@@ -3062,12 +3073,8 @@ function setGovernorButtons(on)
 	local board = getObjectFromGUID(C.board_guid)
 	for _,gov in ipairs(GD.game.governor_track) do
 		local id = "gov_"..tostring(gov.track_row)
-		if on then
-			log("Turn button on for image in row "..id)
-			board.UI.setClass(id ,"gImg_")
-		else
-			log("Turn button off for image in row "..id)
-			board.UI.setClass(id,"gImg")
+		if on then board.UI.setClass(id ,"gImg_")
+		else board.UI.setClass(id,"gImg")
 		end
 	end
 	Wait.frames(function() reloadUI(C.board_guid) end, 60)

@@ -94,6 +94,28 @@
   </Panel>
 </Panel>
 
+<Panel id="end_game_pnl"  active="false"
+  allowDragging="true"
+  returnToOriginalPositionWhenReleased="false"
+  height="140" width="420"
+  padding="20 20 20 20"
+  color="#003699"
+  image="Sprites/Layout/Base">
+  <Panel
+    color="#00091a"
+    image="Sprites/Layout/Base"
+    childAlignment="MiddleCenter">
+    <TableLayout  columnWidths="150 0">
+      <Row preferredHeight="100">
+        <Cell padding="20 0 0 0">
+          <Text id="end_game_winner_txt" fontSize="28" color="Gray" text="Gray" />
+        </Cell>
+        <Cell padding="0 20 0 0"><Text fontSize="28" color="Grey" text="wins the game!" /></Cell>
+      </Row>
+    </TableLayout>
+  </Panel>
+</Panel>
+
 <Panel id="replace_character_pnl"   active="false"
   height="220" width="420"
   padding="10 10 10 10"
@@ -166,6 +188,7 @@
 
 <Panel id="startPanel"  active="false"
   allowDragging="true"
+  returnToOriginalPositionWhenReleased="false"
   height="400" width="500"
   padding="20 20 20 20"
   color="#003699"

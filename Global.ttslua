@@ -20,12 +20,10 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 *** MVP FEATURES ***
 
 	--TODO: TEST lots of stuff.  Like doubling track action, doubling character trade action.  etc.
-	--TODO: TEST end game
 
 *** OTHER STUFF ***
 
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
-	--TODO: add player prefs dialog.  So far, auto_select_zero_route is an option.  maybe auto_select_unique_cheapest_route
 
 	--TODO: (maybe) during action selection, don't show dial pointers until an action is clicked ??  (minor)
 	--TODO: (maybe) unlock only last house in pool (and last palace).  Check after each drop, unlock another if more actions.
@@ -45,6 +43,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** Stuff that is done ***
 
+	**BUG: FIXED TESTING help text still shows action selection when player turns stage starts
 	*****BUG: FIXED TESTING Free action needs to either a move or a build.  Currently just a move.
 	**BUG FIXED TESTING character bank is not unlocked when player has to choose a replacement.
 	***BUG character cards are going to the wrong spot in bank on exchange.
@@ -63,6 +62,8 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 	--TODO: DONE TESTING add verbose game prints for undo actions
 	--TODO: DONE TESTING final scoring dialog
 	--TODO: DONE TESTING allow player to choose if free action should be used vs paid action. Idea: make it clickable to signify preference?
+	--TODO: DONE TESTING add player prefs dialog.
+	--TODO: DONE TEST end game
 
 ==========================================================================================]]
 
@@ -74,11 +75,11 @@ env.test.in_dev = false
 env.test.force_fresh_save = false
 env.test.save_positions = true
 env.test.auto_switch = true
-env.test.players = {"Blue","Red","Yellow","Purple","Green",}
+-- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
 -- env.test.players = {"Green","Blue",}
--- env.test.players = {"Green","Red","Blue"}
+env.test.players = {"Green","Red","Blue"}
 
 env.game = {}
 env.game.fill_delay = 1
@@ -213,7 +214,6 @@ function restoreGameState()
 	  end
 		UI.setAttribute("status_info","visibility",GD.game.status_visibility)
 		UI.setAttribute("restore_dialog_pnl","active",false)
-		-- if GD.game.stage == "player_turns" then setGovernorButtons(GD.state.governor_buttons) end
 	end, 1)
 end
 
@@ -261,6 +261,7 @@ function startOptionsBtn(player, value, id)
 		-- GD.env.use_auction = setting
 	elseif id == "opt_verbose" then
 		GD.env.verbose = setting
+		UI_setAttribute(id, "isOn", value)
 	else
 		log("*** ERROR: startOptionsBtn() unknown id "..tostring(id))
 	end
@@ -379,6 +380,37 @@ function statusClick(player, btn, id)
 	end
 	-- if env.test.debug then log("Setting vis to "..GD.game.status_visibility) end
 	UI_setAttribute("status_info","visibility",GD.game.status_visibility)
+end
+
+--[[ *****************************
+Handler for clicks in the player preferences dialog.
+Overloaded to handle both button clicks and toggle settings.
+********************************]]
+function prefsOptionClick(player, value, id)
+	if env.test.trace then log("prefsOptionClick() "..player.color..", value: "..tostring(value)..", id: "..tostring(id)) end
+	local plr = GD.game.players[player.color]
+	local action = Split(id,'_')[2]
+	local setting = (value == 'True')
+	log("action: "..tostring(action))
+	if action == "togglePrefs" then
+		plr.prefs.show = not(plr.prefs.show)
+		if plr.prefs.show then
+			UI_setAttribute(player.color.."_prefs_panel","visibility", "Pink|"..player.color)
+		else
+			UI_setAttribute(player.color.."_prefs_panel","visibility", "Pink")
+		end
+	elseif action == "close" then
+		UI_setAttribute(player.color.."_prefs_panel","visibility", "Pink")
+		plr.prefs.show = false
+	elseif action == "zeroCostRoute" then
+		UI_setAttribute(id, "isOn", setting)
+		plr.prefs.auto_select_zero_route = setting
+	elseif action == "uniqeLeastCostRoute" then
+		UI_setAttribute(id, "isOn", setting)
+		plr.prefs.auto_select_unique_cheapest_route = setting
+	else
+		log("***ERROR: prefsOptionClick() Unknown action")
+	end
 end
 
 --[[ *****************************
@@ -578,7 +610,6 @@ function routeSelectClick(player, btn, id)
 	if env.test.trace then log("statusClick() "..player.color..", id: "..tostring(id)) end
 	if player.color ~= GD.game.current_player_color then return end
 	local plr = GD.game.players[player.color]
-
 	if id == "routes_dialog_cancel" then
 		--cancel pending action (basically undo the pending action and clear it)
 		assert(#plr.pending_actions > 0, "***ERROR: No "..player.color.." pending actions during route selection")
@@ -599,7 +630,6 @@ function routeSelectClick(player, btn, id)
 		else
 			getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true, undo=false})
 		end
-
 	elseif Split(id,'_')[2] == "hdr" then
 
 		log("TODO: sort routes by opp")
@@ -746,6 +776,21 @@ function setupGlobalUI()
 			index = index + 1
 		end
 	end
+	--setup the player preferences dialogs
+	local status = getXmlElement("statusPanel",xml)
+	local plr_prefs = simpleDeepCopy(status.children[2])
+	table.remove(status.children[2])
+	for _,pcol in ipairs(GD.game.player_order) do
+		local prefs = simpleDeepCopy(plr_prefs)
+		prefs.attributes.id = pcol.."_prefs_panel"
+		prefs.attributes.visibility = "Pink"
+		prefs.attributes.active = true
+		local e = getXmlElement("pref_zeroCostRoute_opt",prefs)
+		e.attributes.id = pcol.."_zeroCostRoute_opt"
+		e = getXmlElement("pref_uniqeLeastCostRoute_opt",prefs)
+		e.attributes.id = pcol.."_uniqeLeastCostRoute_opt"
+		table.insert(status.children, prefs)
+	end
 	--setup the city rows
 	local city_row = getXmlElement("status_row_template",status_table)
 	local temp_row = simpleDeepCopy(city_row)
@@ -780,7 +825,6 @@ function setupGlobalUI()
 	end
 	status_panel.attributes.width = tostring(panel_width)
 	status_table.attributes.columnWidths = columnWidths
-
 	--[[Setup the Route Picker dialog]]
 	local routes_dialog_pnl = getXmlElement("routes_dialog_pnl",xml)
 	local w = 120 + 40 + 36 + (#GD.game.player_order * 36) - 6
@@ -837,7 +881,6 @@ function setupGlobalUI()
 		end
 		table.insert(route_tbl.children, row)
 	end
-
 	UI.setXmlTable(xml)
 end
 
@@ -879,6 +922,7 @@ function setupPlayers()
 		player.prefer_free_action = false
 		player.pointers = {}
 		player.prefs = {}
+		player.prefs.show = false
 		player.prefs.auto_select_zero_route = env.game.auto_select_zero_route
 		player.prefs.auto_select_unique_cheapest_route = env.game.auto_select_unique_cheapest_route
 		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
@@ -1845,27 +1889,30 @@ function architectDrop(pcol, obj)
 		pending_action.route_cost = 0
 		table.insert(player.pending_actions, pending_action)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
-	else
-		--TODO: this isnt working
-		-- local chooser = not(zero_route)
-		-- if #routes < 2 then chooser = false
-		-- elseif routes[1].total_cost ~= routes[2].total_cost and player.prefs.auto_select_unique_cheapest_route then chooser = false
-		-- end
-		-- if not(chooser) then
-		-- 	pending_action.route_cost = routes[1].total_cost
-		-- 	pending_action.costs = simpleDeepCopy(routes[1].costs)
-		-- 	table.insert(player.pending_actions, pending_action)
-		-- 	getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
-		-- else
-		-- 	table.insert(player.pending_actions, pending_action)
-		-- 	getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
-		-- 	updateRouteDialog(pcol)
-		-- end
-		table.insert(player.pending_actions, pending_action)
-		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
-		GD.game.select_route_dialog = true
-		updateRouteDialog(pcol)
+		return
+	elseif player.prefs.auto_select_unique_cheapest_route then
+		if #player.route_table == 1 or player.route_table[1].total_cost ~= player.route_table[2].total_cost then
+			local route = player.route_table[1]
+			pending_action.route_cost = route.total_cost
+			player.gold = player.gold - route.total_cost
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{gold_coins=player.gold})
+			for color,cost in pairs(route.costs) do
+				local opp = GD.game.players[color]
+				opp.gold = opp.gold + cost
+				getObjectFromGUID(C.player_boards[color]).call("setState",{gold_coins=opp.gold})
+				if GD.env.verbose then printToAll(pcol.." pays "..color.." "..tostring(cost).." gold") end
+			end
+			if GD.env.verbose then printToAll(pcol.." pays "..tostring(route.total_cost).." gold to move Architect") end
+			pending_action.costs = simpleDeepCopy(route.costs)
+			table.insert(player.pending_actions, pending_action)
+			getObjectFromGUID(C.player_boards[pcol]).call("setState",{undo=true})
+			return
+		end
 	end
+	table.insert(player.pending_actions, pending_action)
+	getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, undo=false})
+	GD.game.select_route_dialog = true
+	updateRouteDialog(pcol)
 end
 
 --[[ *****************************
@@ -1930,17 +1977,18 @@ function startPlayerTurn(pcol)
 	if track then setGovernorButtons(true) end
 	if char then charactersLock(pcol, false) end
 	--enable player board for actions
+	local state = {undo=false,}
+	state.active = true
+	state.done = true
+	state.extra_actions = GD.game.players[pcol].extra_actions
+	state.extra_button = state.extra_actions > 0
 	local txt = "Execute actions in any order.\n" 			--TODO: make this a constant?
 	txt = txt.."May move Architect at any time.\n"
 	txt = txt.."All required actions must be executed.\n"
+	state.help_text = txt..C.character_bonus_descriptions[player.character_id]
+	getObjectFromGUID(C.player_boards[pcol]).call("setState",state)
 	for _,p in ipairs(GD.game.player_order) do
-		local state = {undo=false,}
-		state.active = (p == pcol)
-		state.done = state.active
-		state.extra_actions = GD.game.players[p].extra_actions
-		state.extra_button = state.active and state.extra_actions > 0
-		state.help_txt = txt..C.character_bonus_descriptions[player.character_id]
-		getObjectFromGUID(C.player_boards[p]).call("setState",state)
+		if p ~= pcol then getObjectFromGUID(C.player_boards[p]).call("setState") end --set everyone else inactive
 	end
 end
 
@@ -2449,7 +2497,6 @@ function endGame()
 	setGovernorButtons(false)
 
 	log("TODO: rank all players and show a dialog with final ranking")
-
 end
 
 --[[/////////////// Support functions /////////////////////]]

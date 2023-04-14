@@ -231,7 +231,19 @@
       color="rgba(0,0,0,0)" >
       <Cell>
         <Panel id="status_title" image="Sprites/Layout/Title" color="#003699" onClick="statusClick">
-          <Text class="medium" color="rgb(0.8,0.8,0.8)" text="City Scoring Status"/>
+          <TableLayout columnWidths="40 0 40">
+            <Row preferredHeight="40">
+              <Cell padding="10 10 10 10">
+                <Button id="prefs_togglePrefs_btn" onClick="prefsOptionClick" tooltip="Toggle Player Preferences">
+                  <Image image="Sprites/Icons/Cog" color="rgb(0.8,0.8,0.8)" />
+                </Button>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text class="medium" color="rgb(0.8,0.8,0.8)" text="City Scoring Status"/>
+              </Cell>
+              <Cell/>
+            </Row>
+          </TableLayout>
         </Panel>
       </Cell>
     </Row>
@@ -256,6 +268,52 @@
       </Cell>
     </Row>
   </TableLayout>
+  <Panel id="prefs_panel" active="false"
+    visibility=""
+    height="220" width="400"
+    offsetXY="0 -220"
+    rectAlignment="MiddleLeft"
+    color="#00091a" >
+    <TableLayout id="prefs_table" columnWidths="80 0" color="rgba(0,0,0,0)">
+      <Row>
+        <Cell padding="0 0 0 0" columnSpan="2">
+          <Panel image="Sprites/Layout/Title" color="#003699">
+            <Text color="rgb(0.8,0.8,0.8)" text="Player Preferences"/>
+          </Panel>
+        </Cell>
+      </Row>
+      <Row preferredHeight="60">
+        <Cell padding="0 0 0 0">
+          <Toggle class="Options" id="pref_zeroCostRoute_opt" onValueChanged="prefsOptionClick" isOn="true"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text color="rgb(0.8,0.8,0.8)" fontsize="12" alignment="MiddleLeft">
+            Auto select a zero cost Architect route.
+            Route selection dialog will not be shown if one exists.
+          </Text>
+        </Cell>
+      </Row>
+      <Row preferredHeight="60">
+        <Cell padding="0 0 0 0">
+          <Toggle class="Options" id="pref_uniqeLeastCostRoute_opt" onValueChanged="prefsOptionClick" isOn="false"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text color="rgb(0.8,0.8,0.8)" fontSize="12" alignment="MiddleLeft">
+            Auto select the least cost Architect route if unique.
+            Route selection dialog will still show if more than one
+            route payout combination is possible at the lowest cost.
+          </Text>
+        </Cell>
+      </Row>
+      <Row preferredHeight="60">
+        <Cell padding="150 150 20 10" columnSpan="2">
+          <Button id="pref_close_btn" onClick="prefsOptionClick" >
+            <Text color="rgb(1,1,0)" text="Close"/>
+          </Button>
+        </Cell>
+      </Row>
+    </TableLayout>
+  </Panel>
 </Panel>
 
 <Panel id="routes_dialog_pnl" active="false"

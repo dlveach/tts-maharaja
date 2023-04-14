@@ -80,7 +80,7 @@ end
 Update the UI to the current board (object) state.
 ********************************]]
 function updateUI()
-  if env.test.debug then log(gid.."updateUI()") end
+  if env.test.trace then log(gid.."updateUI()") end
   if GD.state.dormant then
     self.UI.setAttribute("info_pnl","active", false)
   else

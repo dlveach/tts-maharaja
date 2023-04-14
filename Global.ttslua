@@ -69,19 +69,19 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 env = {}
 env.test = {}
 env.test.trace = true
-env.test.debug = true
+env.test.debug = false
 env.test.in_dev = false
 env.test.force_fresh_save = false
 env.test.save_positions = true
 env.test.auto_switch = true
--- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
+env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
-env.test.players = {"Green","Blue",}
+-- env.test.players = {"Green","Blue",}
 -- env.test.players = {"Green","Red","Blue"}
 
 env.game = {}
-env.game.fill_delay = 2
+env.game.fill_delay = 1
 env.game.use_help = true
 env.game.auto_select_zero_route = true
 env.game.auto_select_unique_cheapest_route = false  --TODO: not working yet to enable
@@ -152,10 +152,10 @@ function reloadUI(guid)
 	if guid then
 		local obj = getObjectFromGUID(guid)
 		if obj ~= nil then
-			log("reloading object UI for guid "..tostring(guid))
+			if env.test.debug then log("reloading object UI for "..obj.getName()..", guid "..tostring(guid)) end
 			obj.UI.setXml(obj.UI.getXml())
 		else
-			log("***WARN: reloadUI() unable to get object for "..tostring(guid))
+			log("***WARN: reloadUI() unable to get object for "..tostring(guid))  --DEBUG LOGGING
 		end
 	else
 		log("reloading global UI")
@@ -754,7 +754,6 @@ function setupGlobalUI()
 	for i,gov in ipairs(GD.game.governor_track) do
 		local row = simpleDeepCopy(temp_row)
 		local ref = gov.UI_row
-		log("creating row for child "..tostring(ref))
 		row.attributes.id = "status_row_"..tostring(ref)
 		local text = getXmlElement("status_city_name_template",row)
 		text.attributes.id = "status_city_name_"..tostring(ref)
@@ -772,8 +771,6 @@ function setupGlobalUI()
 		table.insert(status_table.children,2,row) --always next after header, pushing rest downward
 	end
 	if env.test.debug then
-		log("status table")
-		-- log(status_table.children)
 		for i,c in ipairs(status_table.children) do
 			if i > 1 then
 				log(tostring(i)..": id:"..c.attributes.id)
@@ -922,10 +919,9 @@ function coroFillPlayerBoards()
 		end
 	end
 	local house = getObjectFromGUID(C.house_object_guid)
-	assert(house, "*** ERROR: coroFillPlayerBoards(): no house object")
+	assert(house, "***ERROR: coroFillPlayerBoards(): no house object")
 	local palace = getObjectFromGUID(C.palace_object_guid)
-	assert(palace, "*** ERROR: coroFillPlayerBoards(): no palace object")
-
+	assert(palace, "***ERROR: coroFillPlayerBoards(): no palace object")
 	--remove unused player area objects
 	local board = getObjectFromGUID(C.board_guid)
 	local rot = board.getRotation()
@@ -951,12 +947,11 @@ function coroFillPlayerBoards()
 				obj.interactable = false
 				table.insert(GD.network[city.node].palaces, {g=obj.getGUID(),c=pcol,})
 				pauseMe()
-				Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+				waitLock(obj)
 			end
 		end
 	end
 	pauseMe(10)
-
 	--fill seated player boards
 	for _,pcol in ipairs(GD.game.player_order) do
 		local player = GD.game.players[pcol]
@@ -976,7 +971,7 @@ function coroFillPlayerBoards()
 			obj.setDescription("Palace")
 			table.insert(player.palaces, {g=obj.getGUID(),p=pos})
 			pauseMe()
-			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+			waitLock(obj)
 		end
 		copy({house})
 		for i,loc in ipairs(C.player_board_quarry_locations) do
@@ -990,7 +985,7 @@ function coroFillPlayerBoards()
 			obj.setDescription("House")
 			table.insert(player.quarry, {g=obj.getGUID(),p=pos})
 			pauseMe()
-			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+			waitLock(obj)
 		end
 		for i=5,8 do
 			local p = {position=player.pool[i].p}
@@ -1002,7 +997,7 @@ function coroFillPlayerBoards()
 			obj.setDescription("House")
 			player.pool[i].g = obj.getGUID()
 			pauseMe()
-			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+			waitLock(obj)
 		end
 		local dial = getObjectFromGUID(C.action_dials[pcol])
 		assert(dial, "*** ERROR: coroFillPlayerBoards(): no dial object for color "..tostring(pcol))
@@ -1010,7 +1005,6 @@ function coroFillPlayerBoards()
 		dial.call("disableDialButtons")
 		dial.call("showMe")
 	end
-
 	--setup for next game stage
 	if GD.game.auction_characters then
 
@@ -1239,7 +1233,8 @@ function characterDrop(pcol, obj)
 		local rot = player_board.getRotation()
 		obj.setPositionSmooth(pos, false, true)
 		obj.setRotation(rot)
-		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		waitLock(obj)
+		-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 		local pending_action = {
 			key = "select_starting_character",
 			player_color = pcol,
@@ -1269,7 +1264,8 @@ function characterDrop(pcol, obj)
 			local player_board = getObjectFromGUID(C.player_boards[pcol])
 			obj.setPositionSmooth(player_board.positionToWorld(C.player_board_character_location), false, true)
 			obj.setRotation(player_board.getRotation())
-			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+			waitLock(obj)
+			-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 			local pending_action = {
 				key = "replace",
 				player_color = pcol,
@@ -1331,7 +1327,8 @@ function characterDrop(pcol, obj)
 					current.setRotation(board.getRotation())
 					obj.setPositionSmooth(player_board.positionToWorld(C.player_board_character_location), false, true)
 					obj.setRotation(player_board.getRotation())
-					Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+					waitLock(obj)
+					-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 					table.insert(player.pending_actions, pending_action)
 					getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 					turn_action.status = "Done"
@@ -1393,7 +1390,8 @@ function houseDrop(pcol, obj)
 		pos.y = 1.5
 		obj.setRotation(board.getRotation())
 		obj.setPosition(pos)
-		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		waitLock(obj)
+		-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
 	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
@@ -1415,7 +1413,8 @@ function houseDrop(pcol, obj)
 		obj.setRotationSmooth(rot, false, true)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
 		table.insert(node.houses[color],obj.getGUID())
-		Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		waitLock(obj)
+		-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
 	--//////////////////////////////////
 
@@ -1615,9 +1614,10 @@ function palaceDrop(pcol, obj)
 		pos.y = 1.5
 		obj.setRotationSmooth(rot, false, true)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
-		Wait.frames(function() --start moving TESTING BUG FIX: lock palaces after placing
-			Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-		end, 1)
+		waitLock(obj)
+		-- Wait.frames(function() --start moving TESTING BUG FIX: lock palaces after placing
+		-- 	Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
+		-- end, 1)
 	end
 	--//////////////////////////////////
 
@@ -2377,7 +2377,8 @@ function moveMaharaja()
 	local maha = getObjectFromGUID(C.maharaja_guid)
 	maha.setLock(false)
 	maha.setPosition(pos)
-	Wait.condition(function() maha.setLock(true) end, function() return(maha.resting) end, 2)
+	waitLock(maha)
+	-- Wait.condition(function() maha.setLock(true) end, function() return(maha.resting) end, 2)
 	-- move table 1st to 7th, shift others up
 	local temp = simpleDeepCopy(track[1])
 	temp.UI_row = track[7].UI_row

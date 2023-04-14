@@ -2874,8 +2874,10 @@ function updateStatusPanel()
 		UI_setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
 		if gov.node == GD.game.maharaja_node then
 			UI_setAttribute("status_city_name_"..gov.UI_row, "color", "rgb(1,1,0)")
+			UI_setAttribute("status_city_name_"..gov.UI_row, "fontStyle", "BoldAndItalic")
 		else
 			UI_setAttribute("status_city_name_"..gov.UI_row, "color", "white")
+			UI_setAttribute("status_city_name_"..gov.UI_row, "fontStyle", "Normal")
 		end
 		local scores = GD.game.city_scores[gov.city]
 		for pcol,score in pairs(scores) do

@@ -43,6 +43,9 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** Stuff that is done ***
 
+	****BUG: FIXED TESTING NASTY gaps in track are not handled correctly when moving governor involves the gap.
+	***BUG: FIXED TESTING only enable button on track rows with a governor in it.  Empty rows (gaps) shold not have buttons.
+	***BUG: FIXED TESTING Double track action does not work, need to keep buttons enabled if more track actions in turn_actions
 	**BUG: FIXED TESTING help text still shows action selection when player turns stage starts
 	*****BUG: FIXED TESTING Free action needs to either a move or a build.  Currently just a move.
 	**BUG FIXED TESTING character bank is not unlocked when player has to choose a replacement.
@@ -307,33 +310,54 @@ function governorClick(player, btn, id)
 		pending_action.action_index = turn_action.index
 		turn_action.status = "Done"
 		table.insert(GD.game.players[player.color].pending_actions, pending_action)
-		--find the data table index for the clicked row
-		local index = -1
-		for i=1,7 do
-			if track[i].track_row == row_clicked then
-				index = i
-				break
+		--build a model of the entire board track (including empty spaces)
+		local board_track = {}
+		local gov = 1
+		for i=1,17 do
+			if gov <= 7 and i == track[gov].track_row then
+				table.insert(board_track, simpleDeepCopy(track[gov]))
+				gov = gov + 1
+			else
+				table.insert(board_track, {"empty"})
 			end
 		end
-		assert(index > 0,"***ERROR: bad track index")
-		-- move down two (or one or zero) spots in track table, shift others up
-		local temp = simpleDeepCopy(track[index])
-		temp.track_row = temp.track_row - 2
-		if temp.track_row < 1 then temp.track_row = 1 end
-		temp.UI_row = temp.UI_row + 2
-		if temp.UI_row > 7 then temp.UI_row = 7 end
-		local new_index = index - 2
-		if new_index < 1 then new_index = 1 end
-		for i = index, new_index+1, -1 do
-			track[i] = simpleDeepCopy(track[i-1])
-			track[i].track_row = track[i-1].track_row + 1
-			track[i].UI_row = track[i-1].UI_row - 1
+		--move clicked governor down two spots in board track and shift spots inbetween up
+		local tmp = simpleDeepCopy(board_track[row_clicked])
+		local target_row = row_clicked - 2
+		if target_row < 1 then target_row = 1 end  --not paast the end
+		for i = row_clicked, target_row+1, -1 do
+			board_track[i] = simpleDeepCopy(board_track[i-1])
 		end
-		track[new_index] = temp
+		board_track[target_row] = tmp
+		--rebuild the governor_track data table from board track
+		local temp = {}
+		local index = 0
+		local ui_row = 7
+		for i=1,17 do
+			if board_track[i].city then
+				index = index + 1
+				board_track[i].track_row = i
+				board_track[i].UI_row = ui_row
+				table.insert(temp, board_track[i])
+				ui_row = ui_row - 1
+			end
+			if index == 7 then break end
+		end
+		GD.game.governor_track = temp
+		--update the displays
 		updateGovernorTrack()
-		setGovernorButtons(false)
+		updateStatusPanel()
 		updateDialUI(player.color)
 		getObjectFromGUID(C.player_boards[player.color]).call("setState",{undo=true})
+		if not(getAvailableAction(player.color, "track")) then
+			setGovernorButtons(false)
+		else
+			--player has another track action, re-enable buttons and disable debounce
+			setGovernorButtons(true)
+			Wait.frames(function()
+				GD.game.players[player.color].governor_clicked = false
+			end, 60)
+		end
 	end
 end
 
@@ -3101,13 +3125,19 @@ function setGovernorButtons(on)
 	on = on or false
 	if env.test.trace then log("enableGovernorButtons() "..tostring(on)) end
 	local board = getObjectFromGUID(C.board_guid)
-	for _,gov in ipairs(GD.game.governor_track) do
-		local id = "gov_"..tostring(gov.track_row)
-		if on then board.UI.setClass(id ,"gImg_")
-		else board.UI.setClass(id,"gImg")
+	for i=1,17 do
+		local id = "gov_"..tostring(i)
+		if on then
+			local occupied = false
+			for _,gov in ipairs(GD.game.governor_track) do
+				if i == gov.track_row then board.UI.setClass(id ,"gImg_"); occupied=true; break end
+			end
+			if not(occupied) then board.UI.setClass(id,"gImg") end
+		else
+			board.UI.setClass(id,"gImg")
 		end
 	end
-	Wait.frames(function() reloadUI(C.board_guid) end, 60)
+	Wait.frames(function() reloadUI(C.board_guid) end, 30)
 	GD.state.governor_buttons = on
 end
 

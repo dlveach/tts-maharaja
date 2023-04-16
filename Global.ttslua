@@ -39,13 +39,11 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 	****BUG: (saw more than once but repro not yet idenfied) duplicates in player.placed_palaces table.
 	****BUG: phantom palace in city node.  Can't repro yet.
-	**BUG (Maybe) check for bugs when other players pickup/drop a player's stuff that's been placed.  I.e. houses to be moved, pawn, etc.
 
-	???BUG: (replicate?) after player has already taken turn, choosing replacement character should not give immediate bonus (coin, ext action, etc.).
-					City scoring however SHOULD be affected by Sadhus.   TEST this.
 
 *** Stuff that is done ***
 
+	**BUG: FIXED TESTING Sadhu bonus not reflected in City Scoring Status until player hits done.  Is counted in city scoring after done.
 	****BUG: FIXED TESTING when moving a house from a village (and maybe city?) need to remove table entry, don't set it to nil.  Breaks ipairs.
 	****BUG: FIXED TESTING NASTY gaps in track are not handled correctly when moving governor involves the gap.
 	***BUG: FIXED TESTING only enable button on track rows with a governor in it.  Empty rows (gaps) shold not have buttons.
@@ -76,7 +74,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 env = {}
 env.test = {}
-env.test.trace = true
+env.test.trace = false
 env.test.debug = false
 env.test.in_dev = false
 env.test.force_fresh_save = false
@@ -166,7 +164,6 @@ function reloadUI(guid)
 			log("***WARN: reloadUI() unable to get object for "..tostring(guid))  --DEBUG LOGGING
 		end
 	else
-		log("reloading global UI")
 		UI.setXml(UI.getXml())
 	end
 end
@@ -188,7 +185,6 @@ TODO: implement
 ********************************]]
 function restoreGameState()
 	if env.test.trace then log("restoreGameState()") end
-	log("TESTING: restoreGameState()")
 	if GD.game.stage ~= "setup" then
 		setupGlobalUI()
 		updateGovernorTrack()
@@ -665,13 +661,10 @@ function routeSelectClick(player, btn, id)
 
 	elseif Split(id,'_')[1] == "route" then
 		local index = tonumber(Split(id,'_')[2])
-		log("selected route index is "..tostring(index))
 		local route = plr.route_table[index]
-		log("selected route is "..route.cities)
 		assert(#plr.pending_actions > 0, "***ERROR: No "..player.color.." pending actions during route selection")
 		local pending = plr.pending_actions[#plr.pending_actions]
 		assert(pending.key == "architect","***ERROR: Incorrect "..player.color.." pending action key during route selection")
-		log("pending action:");log(pending)
 		if route.total_cost > plr.gold then
 			--shouldn't happen if routes are being pruned but handle just in case
 			if GD.env.verbose then broadcastToColor("Not enough gold", player.color) end
@@ -1344,6 +1337,7 @@ function characterDrop(pcol, obj)
 			player.replace_character = false
 			UI_setAttribute("replace_done_pnl","visibility",pcol)
 			UI_setAttribute("replace_undo_pnl","visibility",pcol)
+			updateCityScores()
 		else
 			if getAvailableAction(pcol, "exchange") == nil then
 				if GD.env.verbose then broadcastToColor("No more exchange actions", pcol) end
@@ -1407,6 +1401,7 @@ function characterDrop(pcol, obj)
 					if opponent == "" then txt = txt .. "with bank"
 					else txt = txt .. "with "..opponent end
 					if GD.env.verbose then printToAll(txt) end
+					updateCityScores()
 				else
 					log("ERROR: characterDrop() unexpected: unable to locate unused exchange action for player "..tostring(pcol)) --DEBUG
 					snapBack(obj)
@@ -1468,7 +1463,6 @@ function houseDrop(pcol, obj)
 		if env.test.trace then log("placeCityHouse() "..tostring(obj)..", node "..tostring(node.id)) end
 		local color = obj.getName()
 		local center = GD.network[node.id].center
-		log(tostring(node.name).." center is "..tostring(center))
 		local index = #node.houses[color] + 1
 		--handle > 6 houses in a city for a color. Stack them.
 		local y = 1
@@ -1517,7 +1511,6 @@ function houseDrop(pcol, obj)
 					}
 				},
 			}
-			log(pending_action)																																--DEBUG LOGGING
 			table.insert(player.pending_actions, pending_action)
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 		elseif node.type == "city" then
@@ -1696,7 +1689,6 @@ function palaceDrop(pcol, obj)
 	local pos = obj.getPosition()
 	pos.y = 0
 	local node_index = closestNode(pos)
-	log("nearest is id "..tostring(node_index)..", type "..GD.network[node_index].type..", name "..GD.network[node_index].name)
 	if node_index < 1 then
 		snapBack(obj)
 		return
@@ -1770,7 +1762,6 @@ function architectDrop(pcol, obj)
 	if color ~= pcol then snapback(obj) end
 	local pos = obj.getPosition()
 	local node_index = closestNode(pos)
-	log("nearest is id "..tostring(node_index)..", type "..GD.network[node_index].type..", name "..GD.network[node_index].name)
 	if node_index < 1 then
 		snapBack(obj)
 		return
@@ -2143,7 +2134,7 @@ function playerDone(pcol)
 				player.placed_houses[obj.getGUID()] = {node=action.undo.node_index, pos=obj.getPosition(), rot=obj.getRotation(),}
 				buildPoolLock(pcol, false)
 			elseif action.key == "architect" then
-				log("TODO: finalize architect action, noop?? <---------------")
+					--TODO noop??
 			elseif action.key == "extra_action" then
 					--TODO: noop??
 			else
@@ -3374,7 +3365,6 @@ Handles when player clicks 'Set' or 'Cancel' extra action button.
 function dialExtraAction(params)
 	if env.test.trace then log("dialExtraAction()") end
 	assert(params, "***ERROR: dialExtraAction(): missing params")
-	log(params)
 	assert(params.action,"***ERROR: dialExtraAction(): missing param 'action'")
 	assert(params.player_color,"***ERROR: dialExtraAction(): missing param 'player_color'")
 	local player = GD.game.players[params.player_color]

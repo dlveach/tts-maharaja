@@ -37,12 +37,16 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** BUGs ***
 
-	???BUG: (replicate?) duplicates in player.placed_palaces table.  phantom palace in city node.  Think maybe artifact of testing but not sure.  Watch for this.
+	****BUG: (saw more than once but repro not yet idenfied) duplicates in player.placed_palaces table.
+	****BUG: phantom palace in city node.  Can't repro yet.
+	**BUG (Maybe) check for bugs when other players pickup/drop a player's stuff that's been placed.  I.e. houses to be moved, pawn, etc.
+
 	???BUG: (replicate?) after player has already taken turn, choosing replacement character should not give immediate bonus (coin, ext action, etc.).
 					City scoring however SHOULD be affected by Sadhus.   TEST this.
 
 *** Stuff that is done ***
 
+	****BUG: FIXED TESTING when moving a house from a village (and maybe city?) need to remove table entry, don't set it to nil.  Breaks ipairs.
 	****BUG: FIXED TESTING NASTY gaps in track are not handled correctly when moving governor involves the gap.
 	***BUG: FIXED TESTING only enable button on track rows with a governor in it.  Empty rows (gaps) shold not have buttons.
 	***BUG: FIXED TESTING Double track action does not work, need to keep buttons enabled if more track actions in turn_actions
@@ -1315,13 +1319,6 @@ function characterDrop(pcol, obj)
 		table.insert(player.pending_actions, pending_action)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 	elseif GD.game.stage == "player_turns" then
-		for _,a in ipairs(player.pending_actions) do
-			if a.key == "exchange" then
-				if GD.env.verbose then broadcastToColor("Character already selected", pcol) end
-				snapBack(obj)
-				return
-			end
-		end
 		if char_id == player.character_id then
 			log("TESTING: snap back own character and ignore")
 			snapBack(obj)
@@ -1348,6 +1345,11 @@ function characterDrop(pcol, obj)
 			UI_setAttribute("replace_done_pnl","visibility",pcol)
 			UI_setAttribute("replace_undo_pnl","visibility",pcol)
 		else
+			if getAvailableAction(pcol, "exchange") == nil then
+				if GD.env.verbose then broadcastToColor("No more exchange actions", pcol) end
+				snapBack(obj)
+				return
+			end
 			local curr_id = player.character_id
 			local curr_guid = C.characters[curr_id].g
 			if curr_guid ~= obj.getGUID() then
@@ -1630,8 +1632,13 @@ function houseDrop(pcol, obj)
 					end
 					updateCityScores()
 				elseif old_node.type == "village" then
-					if old_node.houses[1] and old_node.houses[1].g == obj.getGUID() then old_node.houses[1] = nil
-					elseif old_node.houses[2] and old_node.houses[2].g == obj.getGUID() then old_node.houses[2] = nil
+					--BUG don't use nil, use table.remove
+					if old_node.houses[1] and old_node.houses[1].g == obj.getGUID() then
+						-- old_node.houses[1] = nil
+						table.remove(old_node.houses,1)
+					elseif old_node.houses[2] and old_node.houses[2].g == obj.getGUID() then
+						-- old_node.houses[2] = nil
+						table.remove(old_node.houses,2)
 					else
 						log("*** ERROR: playerUndo() unable to clear house "..obj.getGUID().." from network node "..tostring(pending_action.undo.old_node))
 						return
@@ -1672,20 +1679,17 @@ function palaceDrop(pcol, obj)
 		if node.center_palace then
 			local index = #node.palaces + 1
 			local offset = Vector(C.city_palace_offsets[index])
-			log("placing "..color.." palace "..obj.getGUID().." with offset "..tostring(offset))
 			pos = Vector(center) - offset
+			log("placing "..color.." palace "..obj.getGUID().." in node "..tostring(node.id))
 			table.insert(node.palaces,{g=obj.getGUID(),c=color,})
 		else
-			log("placing "..color.." palace "..obj.getGUID().." with offset in city center")
+			log("placing "..color.." palace "..obj.getGUID().." with offset in node "..tostring(node.id).." center")
 			node.center_palace = {g=obj.getGUID(),c=color,}
 		end
 		pos.y = 1.5
 		obj.setRotationSmooth(rot, false, true)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
 		waitLock(obj)
-		-- Wait.frames(function() --start moving TESTING BUG FIX: lock palaces after placing
-		-- 	Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-		-- end, 1)
 	end
 	--//////////////////////////////////
 
@@ -1828,62 +1832,68 @@ function architectDrop(pcol, obj)
 		route.costs = simpleDeepCopy(costs)
 		table.insert(routes,simpleDeepCopy(route))
 	end
-	local tmp = {}
-	for i,route in ipairs(routes) do
-		if route.total_cost <= player.gold then
-			table.insert(tmp, route)
-		else
-			if env.test.debug then log("Route too expensive "..tostring(i)..": "..route.cities) end
-		end
-	end
-	routes = tmp
-	if #routes == 0 then
-		if env.test.debug then log("All routes from node "..tostring(start_id).." to node "..dest_id.." cost more than player "..pcol.." gold") end
-		if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
-		snapback(obj)
-		return
-	end
-	-- keep just one (the shortest) free route
-	local shortest
 	local zero_route = false
-	for i,route in ipairs(routes) do
-		if route.total_cost == 0 then
-			if shortest == nil then
-				zero_route = true
-				shortest = {id=i, length=route.length}
-			elseif route.length < shortest.length then
-				if routes[shortest.id] then routes[shortest.id].total_cost = -1 end
-				shortest.id = i
-				shortest.len = route.length
+	--skip all of this route processing if monk
+	local free_route = false
+	if player.character_id == 4 then
+		free_route = true
+	else
+		local tmp = {}
+		for i,route in ipairs(routes) do
+			if route.total_cost <= player.gold then
+				table.insert(tmp, route)
 			else
-				route.total_cost = -1
-				if env.test.debug then log("removing duplicate 0 cost route "..route.cities) end
+				if env.test.debug then log("Route too expensive "..tostring(i)..": "..route.cities) end
 			end
 		end
-	end
-	--remove duplicates (where all color costs are same, route length does not matter)
-	for i,route in ipairs(routes) do
-		if route.total_cost > 0 then
-			for j,r in ipairs(routes) do
-				if r.total_cost > 0 then
-					local same = true
-					for color,cost in pairs(route.costs) do
-						if not(r[color]) or r[color].cost ~= cost then same = false; break end
-					end
-					if same then
-						routes[j].total_cost = -1
-						if env.test.debug then log("removing duplicate cost route "..route.cities) end
+		routes = tmp
+		if #routes == 0 then
+			if env.test.debug then log("All routes from node "..tostring(start_id).." to node "..dest_id.." cost more than player "..pcol.." gold") end
+			if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
+			snapback(obj)
+			return
+		end
+		-- keep just one (the shortest) free route
+		local shortest
+		for i,route in ipairs(routes) do
+			if route.total_cost == 0 then
+				if shortest == nil then
+					zero_route = true
+					shortest = {id=i, length=route.length}
+				elseif route.length < shortest.length then
+					if routes[shortest.id] then routes[shortest.id].total_cost = -1 end
+					shortest.id = i
+					shortest.len = route.length
+				else
+					route.total_cost = -1
+					if env.test.debug then log("removing duplicate 0 cost route "..route.cities) end
+				end
+			end
+		end
+		--remove duplicates (where all color costs are same, route length does not matter)
+		for i,route in ipairs(routes) do
+			if route.total_cost > 0 then
+				for j,r in ipairs(routes) do
+					if r.total_cost > 0 then
+						local same = true
+						for color,cost in pairs(route.costs) do
+							if not(r[color]) or r[color].cost ~= cost then same = false; break end
+						end
+						if same then
+							routes[j].total_cost = -1
+							if env.test.debug then log("removing duplicate cost route "..route.cities) end
+						end
 					end
 				end
 			end
 		end
+		--now remove all routes that have been pruned (total_cost == -1)
+		local temp = {}
+		for i,route in ipairs(routes) do
+			if route.total_cost >= 0 then table.insert(temp, route) end
+		end
+		routes = temp
 	end
-	--now remove all routes that have been pruned (total_cost == -1)
-	local temp = {}
-	for i,route in ipairs(routes) do
-		if route.total_cost >= 0 then table.insert(temp, route) end
-	end
-	routes = temp
 	--Setup the architect move action
 	local pending_action = {
 		key = "architect",
@@ -1904,11 +1914,11 @@ function architectDrop(pcol, obj)
 	player.architect_location.current_node = node_index
 	player.architect_location.snap_pos = obj.getPosition()
 	updateCityScores()
-	local auto_select_free_route = false
-	if player.character_id == 4 then auto_select_free_route = true
-	elseif zero_route and player.prefs.auto_select_zero_route then auto_select_free_route = true end
+	-- local free_route = false
+	-- if player.character_id == 4 then free_route = true
+	if not(free_route) and zero_route and player.prefs.auto_select_zero_route then free_route = true end
 	--display route dialog if approprite or just auto select the free move
-	if auto_select_free_route then
+	if free_route then
 		if GD.env.verbose then printToAll(pcol.." pays 0 gold to move Architect") end
 		pending_action.route_cost = 0
 		table.insert(player.pending_actions, pending_action)
@@ -2111,6 +2121,7 @@ function playerDone(pcol)
 					updateStatusPanel()
 				end
 			elseif action.key == "palace" then
+				log("adding palace "..tostring(action.guid).." to "..pcol.." placed_palaces")
 				table.insert(player.placed_palaces, action.guid)
 				if #player.placed_palaces == 7 then
 					if not(GD.game.game_end_this_round) then
@@ -2236,9 +2247,12 @@ function playerUndo(pcol)
 		obj.setLock(false)
 		local node = GD.network[action.undo.node_index]
 		if node.houses[1] and node.houses[1].g == action.guid then
-			node.houses[1] = nil
+			--BUG don't use nil, use table.remove
+			-- node.houses[1] = nil
+			table.remove(node.houses,1)
 		elseif node.houses[2] and node.houses[2].g == action.guid then
-			node.houses[2] = nil
+			-- node.houses[2] = nil
+			table.remove(node.houses,2)
 		else
 			log("*** ERROR: playerUndo() unable to clear house "..action.guid.."from network node "..tostring(action.undo.node_index))
 		end
@@ -2267,8 +2281,13 @@ function playerUndo(pcol)
 			updateCityScores(node)
 			updateStatusPanel()
 		else
-			if node.houses[1] and node.houses[1].g == action.guid then node.houses[1] = nil
-			elseif node.houses[2] and node.houses[2].g == action.guid then node.houses[2] = nil
+			--BUG don't use nil, use table.remove
+			if node.houses[1] and node.houses[1].g == action.guid then
+				-- node.houses[1] = nil
+				table.remove(node.houses,1)
+			elseif node.houses[2] and node.houses[2].g == action.guid then
+				-- node.houses[2] = nil
+				table.remove(node.houses,2)
 			else
 				log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))  --DEBUG
 				return
@@ -2324,8 +2343,13 @@ function playerUndo(pcol)
 				return
 			end
 		else
-			if node.houses[1] and node.houses[1].g == action.guid then node.houses[1] = nil
-			elseif node.houses[2] and node.houses[2].g == action.guid then node.houses[2] = nil
+			--BUG don't set to nil, breaks ipairs, use table.remove
+			if node.houses[1] and node.houses[1].g == action.guid then
+				-- node.houses[1] = nil
+				table.remove(node.houses, 1)
+			elseif node.houses[2] and node.houses[2].g == action.guid then
+				-- node.houses[2] = nil
+				table.remove(node.houses, 2)
 			else
 				log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))  --DEBUG
 				return
@@ -2359,11 +2383,14 @@ function playerUndo(pcol)
 		obj.setRotation(action.undo.snapback.rot)
 		obj.setLock(false)
 		local node = GD.network[action.undo.node_index]
+		log("undo place palace for node "..tostring(action.undo.node_index))
 		if node.center_palace and node.center_palace.g == action.guid then
+			log("setting node center_palace to nil")
 			node.center_palace = nil
 		else
 			for i,e in ipairs(node.palaces) do
 				if e.g == action.guid then
+					log("removing "..tostring(action.guid).." from node.palaces index "..tostring(i))
 					table.remove(node.palaces, i)
 					break
 				end
@@ -2508,6 +2535,19 @@ function endGame()
 	broadcastToAll(txt)
 	UI.setAttribute("end_game_winner_txt","text",tostring(winner))
 	UI.setAttribute("end_game_winner_txt","color",tostring(winner))
+	local rank = rankPlayers()
+	for i=1,5 do
+		if rank[i] then
+			UI.setAttribute("end_row_"..tostring(i).."_player","text",rank[i].color)
+			UI.setAttribute("end_row_"..tostring(i).."_player","color",rank[i].color)
+			UI.setAttribute("end_row_"..tostring(i).."_palaces","text",tostring(rank[i].palaces))
+			UI.setAttribute("end_row_"..tostring(i).."_gold","text",tostring(rank[i].gold))
+			UI.setAttribute("end_row_"..tostring(i).."_charid","text",tostring(rank[i].id))
+			UI.setAttribute("end_row_"..tostring(i),"active",true)
+		else
+			UI.setAttribute("end_row_"..tostring(i),"active",false)
+		end
+	end
 	UI.setAttribute("end_game_pnl","active",true)
 
 	--disable all buttons, everything
@@ -2521,6 +2561,106 @@ function endGame()
 	setGovernorButtons(false)
 
 	log("TODO: rank all players and show a dialog with final ranking")
+end
+
+--[[ ****************************
+Bubble sort the players for final end game ranking.
+Sort first by #palaces placed.
+Sort second (first tiebreaker) by most gold.
+Sort third (second tiebreaker) by lowest character ID.
+Returns a sorted array of players {color, pdata}.
+********************************]]
+function rankPlayers()
+	if env.test.trace then log("rankPlayers()") end
+	local rank = {}
+	--sort by palaces placed
+	for color,player in pairs(GD.game.players) do
+		local data = {
+			color=color,
+			palaces=#player.placed_palaces,
+			gold=player.gold,
+			id=player.character_id,
+		}
+		if #rank == 0 then
+			table.insert(rank, data)
+		else
+			local add = true
+			for i,e in ipairs(rank) do
+				if data.palaces > e.palaces then
+					table.insert(rank, i, data)
+					add = false
+					break
+				elseif data.palaces == e.palaces then
+					if data.gold > e.gold then
+						table.insert(rank, i, data)
+						add = false
+						break
+					elseif data.gold == e.gold then
+						if data.character_id < e.character_id then
+							table.insert(rank, i, data)
+							add = false
+							break
+						end
+					end
+				end
+			end
+			if add then
+				table.insert(rank, data)
+			end
+		end
+	end
+	return rank
+end
+
+--DEBUG functions for testing for phantom palaces
+function testPhantomPalaces()
+	for i,n in ipairs(GD.network) do
+		if n.palaces then
+			if n.center_palace ~= nil then
+				local found = false
+				log("checking center "..tostring(n.center_palace.g))
+				for i,g in ipairs(GD.game.players[n.center_palace.c].placed_palaces) do
+					if n.center_palace.g == g then found = true end
+				end
+				if not(found) then
+					log("Found phantom palace "..tostring(e.g).." at network node center "..tostring(i))
+				end
+			end
+			for j,e in ipairs(n.palaces) do
+				if GD.game.players[e.c] ~= nil 	then
+					log("checking "..tostring(e.g))
+					local found = false
+					for i,g in ipairs(GD.game.players[e.c].placed_palaces) do
+						if e.g == g then found = true end
+					end
+					if not(found) then
+						log("Found phantom palace "..tostring(e.g).." at network node "..tostring(i))
+					end
+				end
+			end
+		end
+	end
+end
+
+function testPlacedPalaces(pcol)
+	log("testing player "..tostring(pcol).." for phantom placed palaces")
+	for i,g in ipairs(GD.game.players[pcol].placed_palaces) do
+		local found = false
+		for i,n in ipairs(GD.network) do
+			if n.palaces then
+				for j,e in ipairs(n.palaces) do
+					if e.g == g then found = true end
+				end
+				if n.center_palace ~= nil then
+					if n.center_palace.g == g then found = true end
+				end
+			end
+			if found then break end
+		end
+		if not(found) then
+			log("********** "..pcol.." placed palace "..tostring(g).." not found in network! ***************")
+		end
+	end
 end
 
 --[[/////////////// Support functions /////////////////////]]
@@ -2758,15 +2898,16 @@ function getAvailableAction(pcol, key, village)
 	local village = village or false
 	if env.test.trace then log("getAvailableAction() "..tostring(pcol)..", key: "..tostring(key)..", village: "..tostring(village)) end
 	local player = GD.game.players[pcol]
-	if key == "build" or key == "move" then
+	if key == "build" then
 		if player.prefer_free_action and player.free_action and player.free_action.status == "" then
+			--has free action and wants it first, so give it
 			return player.free_action
 		else
-			if key == "build" and village then
+			if village then  --action must not be city_required
 				for _,action in ipairs(player.turn_actions) do
 					if action.id == key and action.status == "" and not(action.city_required) then return action end
 				end
-			elseif key == "build" and not(village) then
+			else --is a city, search for either
 				for _,action in ipairs(player.turn_actions) do
 					if action.id == key and action.status == "" and action.city_required then return action end
 				end
@@ -2774,9 +2915,20 @@ function getAvailableAction(pcol, key, village)
 					if action.id == key and action.status == "" then return action end
 				end
 			end
+			--didn't find a turn action, try free action
 			if player.free_action and player.free_action.status == "" then return player.free_action end
 		end
-	else --just search for a matching key that is available
+	elseif key == "move" then
+		if player.prefer_free_action and player.free_action and player.free_action.status == "" then
+			return player.free_action
+		else
+			for _,action in ipairs(player.turn_actions) do
+				if action.id == key and action.status == "" then return action end
+			end
+		end
+		--didn't find a turn action, try free action
+		if player.free_action and player.free_action.status == "" then return player.free_action end
+	else --not a build or move, just search for a matching key that is available
 		for _,action in ipairs(player.turn_actions) do
 			if action.id == key and action.status == "" then return action end
 		end

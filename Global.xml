@@ -97,26 +97,126 @@
 <Panel id="end_game_pnl"  active="false"
   allowDragging="true"
   returnToOriginalPositionWhenReleased="false"
-  height="140" width="420"
-  padding="20 20 20 20"
+  height="400" width="600"
+  padding="15 15 15 15"
   color="#003699"
   image="Sprites/Layout/Base">
   <Panel
     color="#00091a"
     image="Sprites/Layout/Base"
     childAlignment="MiddleCenter">
-    <TableLayout  columnWidths="150 0">
-      <Row preferredHeight="100">
-        <Cell padding="20 0 0 0">
-          <Text id="end_game_winner_txt" fontSize="28" color="Gray" text="Gray" />
+    <TableLayout>
+      <Row preferredHeight="80">
+        <Cell>
+          <TableLayout  columnWidths="220 0">
+            <Row preferredHeight="80">
+              <Cell padding="0 10 0 0">
+                <Text id="end_game_winner_txt" fontSize="28" color="Gray" alignment="MiddleRight" text="Gray" />
+              </Cell>
+              <Cell padding="10 0 0 0"><Text fontSize="28" color="rgb(0.8,0.8,0.8)" alignment="MiddleLeft" text="wins the game!" /></Cell>
+            </Row>
+          </TableLayout>
         </Cell>
-        <Cell padding="0 20 0 0"><Text fontSize="28" color="Grey" text="wins the game!" /></Cell>
+      </Row>
+      <Row preferredHeight="20" />
+      <Row preferredHeight="240">
+        <Cell>
+          <TableLayout columnWidths="150 0 0 0">
+            <Row preferredHeight="40">
+              <Cell padding="0 0 0 0">
+                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text=""/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text="Palaces"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text="Gold"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text="Character"/>
+              </Cell>
+            </Row>
+            <Row id="end_row_1" preferredHeight="40">
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_1_player" fontSize="24" color="Gray" text="Gray"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_1_palaces" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_1_gold" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_1_charid" class="large" text="0"/>
+              </Cell>
+            </Row>
+            <Row id="end_row_2" preferredHeight="40">
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_2_player" fontSize="24" color="Gray" text="Gray"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_2_palaces" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_2_gold" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_2_charid" class="large" text="0"/>
+              </Cell>
+            </Row>
+            <Row id="end_row_3" preferredHeight="40">
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_3_player" fontSize="24" color="Gray" text="Gray"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_3_palaces" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_3_gold" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_3_charid" class="large" text="0"/>
+              </Cell>
+            </Row>
+            <Row id="end_row_4" preferredHeight="40">
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_4_player" fontSize="24" color="Gray" text="Gray"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_4_palaces" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_4_gold" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_4_charid" class="large" text="0"/>
+              </Cell>
+            </Row>
+            <Row id="end_row_5" preferredHeight="40">
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_5_player" fontSize="24" color="Gray" text="Gray"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_5_palaces" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_5_gold" class="large" text="0"/>
+              </Cell>
+              <Cell padding="0 0 0 0">
+                <Text id="end_row_5_charid" class="large" text="0"/>
+              </Cell>
+            </Row>
+
+          </TableLayout>
+        </Cell>
       </Row>
     </TableLayout>
   </Panel>
 </Panel>
 
 <Panel id="replace_character_pnl"   active="false"
+  allowDragging="true"
+  returnToOriginalPositionWhenReleased="false"
   height="220" width="420"
   padding="10 10 10 10"
   color="#003699"

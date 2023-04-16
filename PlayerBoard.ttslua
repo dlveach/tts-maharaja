@@ -8,7 +8,7 @@ env={}
 UI_TEST = false
 
 BUTTON_PARAMS = {
-  click_function="extraActionClick",
+  click_function="extraActionToken",
   function_owner=Global,
   position={-0.55,0,-1.25},
   rotation={0,0,0},

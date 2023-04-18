@@ -19,16 +19,15 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** MVP FEATURES ***
 
-	--TODO: TEST lots of stuff.  Like doubling track action, doubling character trade action.  etc.
+	--TODO: Hide help text when choosing actions and click done.  Show again if clicked modify button.  Visual cue to others who's still choosing.
+	--TODO: implement route sorting on opponent selection (button in header of dialog)
+	--TODO: set turn order marker dark (brown?) when turn has been taken.  Visual cue to others.
 
 *** OTHER STUFF ***
 
-	--TODO: implement route sorting on opponent selection (button in header of dialog)
-
-	--TODO: (maybe) during action selection, don't show dial pointers until an action is clicked ??  (minor)
-	--TODO: (maybe) unlock only last house in pool (and last palace).  Check after each drop, unlock another if more actions.
+	--TODO: move the action list display to the player board XML UI.  Avoids the flip problem with the dial.
 	--TODO: (maybe) lock things (pool, placed houses etc.) after action if no more actions of that type.
-	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Takes too long to load.
+	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Minor but weird load artifacts with tokens.
 
 	--Code cleanup, refactoring
 	--TODO: Get rid of turn_action.index. Rather use turn_action table entry reference in pending_action? Cleaner but is this ok for JSON save encode?
@@ -37,12 +36,20 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** BUGs ***
 
-	****BUG: (saw more than once but repro not yet idenfied) duplicates in player.placed_palaces table.
-	****BUG: phantom palace in city node.  Can't repro yet.
+	*BUG: Repro: have extra action and one pointer action for exchange. use extra action for another exchange and do it.  Then undo all the way out to turn start.
+					Result is tiles not unlocked for the original pointer excnage action.  WORKAROUND: use rewind time to just before start of turn.
+	???BUG: (saw more than once but repro not yet idenfied) duplicates in player.placed_palaces table.  Maybe came from reloading & testing?  Not sure.
+	???BUG: phantom palace in city node.  Can't repro yet.  Added sync test on player turn end to check consistency.
 
 
 *** Stuff that is done ***
 
+	***BUG: FIXED TESTING need to add palace to player.placed_palaces in pending action & undo.
+	***BUG: FIXED TESTING placed palaces getting unlocked in unplayedPalacesLock().  Cause: not checking player.placed_palaces in fn.
+	****BUG: FIXED TESTING setting gov buttons in updateLockStates is bad.  Remove it and set explicity.
+	**BUG: FIXED TESTING Replacement char id isn't updated in player until they hit done so updateCityScores() doesn't change (for Sadhus) until they hit done.
+	***BUG: FIXED TESTING attempt to build palace into full city, isn't detected in drop palace.  Just fails.
+	**BUG: TESTING only make last placed unlocked for move.  Unlocking another for more available move actions. etc.  Lot of work.
 	**BUG: FIXED TESTING Sadhu bonus not reflected in City Scoring Status until player hits done.  Is counted in city scoring after done.
 	****BUG: FIXED TESTING when moving a house from a village (and maybe city?) need to remove table entry, don't set it to nil.  Breaks ipairs.
 	****BUG: FIXED TESTING NASTY gaps in track are not handled correctly when moving governor involves the gap.
@@ -78,19 +85,22 @@ env.test.trace = false
 env.test.debug = false
 env.test.in_dev = false
 env.test.force_fresh_save = false
-env.test.save_positions = true
+env.test.save_positions = false
 env.test.auto_switch = true
--- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
+env.test.test_palace_sync = true --TESTING player placed palace sync with network palaces.  Looking for bug repro.
+
+env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
 -- env.test.players = {"Green","Blue",}
-env.test.players = {"Green","Red","Blue"}
+-- env.test.players = {"Green","Red","Blue"}
 
 env.game = {}
 env.game.fill_delay = 1
 env.game.use_help = true
 env.game.auto_select_zero_route = true
-env.game.auto_select_unique_cheapest_route = false  --TODO: not working yet to enable
+env.game.auto_select_unique_cheapest_route = false
+env.game.give_immediate_replacement_bonus = false
 
 GD = {}
 
@@ -141,6 +151,7 @@ function onLoad(saved_data)
 		UI_setAttribute("opt_use_auction","isOn",GD.env.use_auction)
 		GD.env.verbose = true
 		UI_setAttribute("opt_verbose","isOn",GD.env.verbose)
+		GD.env.give_immediate_replacement_bonus = env.game.give_immediate_replacement_bonus
 		for _,g in pairs(C.player_pawns) do
 			getObjectFromGUID(g).setLock(true)
 		end
@@ -526,7 +537,14 @@ function extraActionToken(obj, pcol, rclick)
 	obj.call("setState",{done=false,undo=false,extra_actions=player.extra_actions,extra_button=false})
 	local dial = getObjectFromGUID(C.action_dials[pcol])
 	dial.call("enableExtraActionButtons")
-	updateLockStates(pcol, true)
+
+	-- updateLockStates(pcol, true)		--BUG
+	unplayedPalacesLock(pcol, true)
+	buildPoolLock(pcol, true)
+	placedHousesLock(pcol, true)
+	setGovernorButtons(false)
+	charactersLock(pcol, true)
+
 	getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
 end
 
@@ -578,7 +596,6 @@ if 'Undo' undo the selection in playerUndo().
 function replaceCharDialogBtn(player, btn, id)
 	if env.test.trace then log("replaceCharDialogBtn(): player "..player.color..", id="..tostring(id)) end
 	local command = Split(id,'_')[3]
-	log("command = "..tostring(command))
 	local plr = GD.game.players[player.color]
 	local pending_action,pending_index
 	for i,a in ipairs(plr.pending_actions) do
@@ -594,8 +611,12 @@ function replaceCharDialogBtn(player, btn, id)
 	end
 	if command == "done" then
 		charactersLock("all", true)
-		plr.character_id = pending_action.character_id
-		setCharacterBonus(player.color, false)
+		--TODO: TESTING adding env var to give bonus on selection of replacement if player hasn't taken turn yet.
+		if GD.env.give_immediate_replacement_bonus and plr.has_actions then
+			if pending_action.character_id == 2 or pending_action.character_id == 7 then
+				setCharacterBonus(player.color, true)
+			end
+		end
 		plr.replace_character = false
 		table.remove(plr.pending_actions,pending_index)
 		updateDialUI(player.color)
@@ -612,13 +633,16 @@ function replaceCharDialogBtn(player, btn, id)
 			startPlayerTurn(setNextPlayer())
 		end
 	elseif command == "undo" then
-		-- playerUndo(player.color)
 		local obj = getObjectFromGUID(pending_action.undo.guid)
 		obj.setPosition(pending_action.undo.snapback.pos)
 		obj.setRotation(pending_action.undo.snapback.rot)
 		obj.setLock(false)
 		plr.replace_character = true
+		plr.character_id = pending_action.undo.old_id
+		setCharacterBonus(player.color, false)
+		updateCityScores()
 		table.remove(plr.pending_actions,pending_index)
+		UI_setAttribute("replace_done_pnl","visibility","Pink")
 		UI_setAttribute("replace_undo_pnl","visibility","Pink")
 	else
 		log("*** ERROR replaceCharDialogBtn() unknown command")
@@ -639,7 +663,6 @@ function routeSelectClick(player, btn, id)
 		assert(#plr.pending_actions > 0, "***ERROR: No "..player.color.." pending actions during route selection")
 		local pending = plr.pending_actions[#plr.pending_actions]
 		assert(pending.key == "architect","***ERROR: Incorrect "..player.color.." pending action key during route selection")
-		log("pending action:");log(pending)
 		local return_pos = pending.undo.snapback.pos
 		local old_node = pending.undo.snapback.old_node
 		local pawn = getObjectFromGUID(pending.guid)
@@ -927,25 +950,35 @@ function setupPlayers()
 	GD.game.status_visibility = "Pink"
 	for _,pcol in ipairs(GD.game.player_order) do
 		reloadUI(C.player_boards[pcol])
-		GD.game.players[pcol] = simpleDeepCopy(C.player_data)
-		local player = GD.game.players[pcol]
-		player.architect_location = {
-			current_node = 38,
-			dest_node = -1,
-			snap_pos = getObjectFromGUID(C.player_pawns[pcol]).getPosition(),
+		GD.game.players[pcol] = {
+		  quarry = {},
+		  pool = {},
+		  palaces = {},
+		  placed_palaces = {},
+		  placed_houses = {},
+		  gold = 15,  --TODO: extra gold if auction character selection order?
+		  extra_actions = 0,
+			actions_set = false,
+		  character_id = -1,
+		  has_actions = false,
+			free_action = nil,
+		  pending_actions = {},
+		  turn_actions = {},
+		  status_panel = true,
+		  architect_location = {
+				current_node = 38,
+				dest_node = -1,
+				snap_pos = getObjectFromGUID(C.player_pawns[pcol]).getPosition(),
+			},
+			prefer_free_action = false,
+			pointers = {},
+			prefs = {
+				show = false,
+				auto_select_zero_route = env.game.auto_select_zero_route,
+				auto_select_unique_cheapest_route = env.game.auto_select_unique_cheapest_route,
+			},
 		}
-		player.gold = 15  --TODO: extra gold if auction character selection order?
-		player.extra_actions = 0
-		player.turn_actions = {}
-		player.pending_actions = {}
-		player.actions_set = false
-		player.free_action = nil
-		player.prefer_free_action = false
-		player.pointers = {}
-		player.prefs = {}
-		player.prefs.show = false
-		player.prefs.auto_select_zero_route = env.game.auto_select_zero_route
-		player.prefs.auto_select_unique_cheapest_route = env.game.auto_select_unique_cheapest_route
+		local player = GD.game.players[pcol]
 		getObjectFromGUID(C.player_pawns[pcol]).setLock(true)
 		--initialize player pool
 		local player_board = getObjectFromGUID(C.player_boards[pcol])
@@ -1264,7 +1297,7 @@ Process a dropped character card.
 Result depends on game stage.
 ********************************]]
 function characterDrop(pcol, obj)
-	if env.test.trace then log("characterDrop()") end
+	if env.test.trace then log("characterDrop() "..tostring(pcol)..", "..obj.getGUID()) end
 	local char_id = getCharacterId(obj.getGUID())
 	local board = getObjectFromGUID(C.board_guid)
 	local player = GD.game.players[pcol]
@@ -1299,7 +1332,6 @@ function characterDrop(pcol, obj)
 		obj.setPositionSmooth(pos, false, true)
 		obj.setRotation(rot)
 		waitLock(obj)
-		-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 		local pending_action = {
 			key = "select_starting_character",
 			player_color = pcol,
@@ -1313,7 +1345,6 @@ function characterDrop(pcol, obj)
 		getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
 	elseif GD.game.stage == "player_turns" then
 		if char_id == player.character_id then
-			log("TESTING: snap back own character and ignore")
 			snapBack(obj)
 			return
 		end
@@ -1323,7 +1354,6 @@ function characterDrop(pcol, obj)
 			obj.setPositionSmooth(player_board.positionToWorld(C.player_board_character_location), false, true)
 			obj.setRotation(player_board.getRotation())
 			waitLock(obj)
-			-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 			local pending_action = {
 				key = "replace",
 				player_color = pcol,
@@ -1333,11 +1363,18 @@ function characterDrop(pcol, obj)
 					snapback = {pos=C.characters[char_id].bank_pos, rot=board.getRotation()},
 				},
 			}
+
+			--TODO: TESTING BUGFIX: set replacement character id and update info on drop
+			pending_action.undo.old_id = player.character_id
+			player.character_id = char_id
+			setCharacterBonus(pcol, false)
+			updateCityScores()
+
 			table.insert(player.pending_actions, pending_action)
 			player.replace_character = false
 			UI_setAttribute("replace_done_pnl","visibility",pcol)
 			UI_setAttribute("replace_undo_pnl","visibility",pcol)
-			updateCityScores()
+			-- updateCityScores()  --TODO: BUG: doesn't do anything because char id isn't updated in player data until they hit done in dialog.
 		else
 			if getAvailableAction(pcol, "exchange") == nil then
 				if GD.env.verbose then broadcastToColor("No more exchange actions", pcol) end
@@ -1346,66 +1383,67 @@ function characterDrop(pcol, obj)
 			end
 			local curr_id = player.character_id
 			local curr_guid = C.characters[curr_id].g
-			if curr_guid ~= obj.getGUID() then
-				local opponent = ""
-				local opp_char_id = -1
-				for color,opp in pairs(GD.game.players) do
-					if color != pcol then
-						if opp.character_id == char_id then
-							opponent = color
-							opp_char_id = opp.character_id
-							break
-						end
+			if curr_guid == obj.getGUID() then
+				snapBack(obj) --ignore player's own character
+				return
+			end
+			local opponent = ""
+			local opp_char_id = -1
+			for color,opp in pairs(GD.game.players) do
+				if color != pcol then
+					if opp.character_id == char_id then
+						opponent = color
+						opp_char_id = opp.character_id
+						break
 					end
 				end
-				local pending_action = {
-					key = "exchange",
-					player_color = pcol,
-					character_id = char_id,
-					old_char_id = curr_id,
-					opponent = opponent,
-					opp_char_id = opp_char_id,
-					undo = {
-						new_guid = obj.getGUID(),
-						snapback = {pos=C.characters[char_id].bank_pos, rot=board.getRotation()},
-						old_guid = curr_guid,
-					},
-				}
-				if opponent == "" then
-					pending_action.bank = true
-				else
-					pending_action.bank = false
-					pending_action.opp_char_id = opp_char_id
-					local opp_board =  getObjectFromGUID(C.player_boards[opponent])
-					pending_action.undo.snapback.pos = opp_board.positionToWorld(C.player_board_character_location)
-					pending_action.undo.snapback.rot = opp_board.getRotation()
-				end
-				local turn_action = getAvailableAction(pcol, "exchange")
-				if turn_action then
-					player.character_id = char_id
-					setCharacterBonus(pcol)
-					pending_action.action_index = turn_action.index
-					local player_board = getObjectFromGUID(C.player_boards[pcol])
-					local current = getObjectFromGUID(curr_guid)
-					current.setPosition(C.characters[curr_id].bank_pos)
-					current.setRotation(board.getRotation())
-					obj.setPositionSmooth(player_board.positionToWorld(C.player_board_character_location), false, true)
-					obj.setRotation(player_board.getRotation())
-					waitLock(obj)
-					-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
-					table.insert(player.pending_actions, pending_action)
-					getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
-					turn_action.status = "Done"
-					updateDialUI(pcol)
-					local txt = pcol.." exchanges character "
-					if opponent == "" then txt = txt .. "with bank"
-					else txt = txt .. "with "..opponent end
-					if GD.env.verbose then printToAll(txt) end
-					updateCityScores()
-				else
-					log("ERROR: characterDrop() unexpected: unable to locate unused exchange action for player "..tostring(pcol)) --DEBUG
-					snapBack(obj)
-				end
+			end
+			local pending_action = {
+				key = "exchange",
+				player_color = pcol,
+				character_id = char_id,
+				old_char_id = curr_id,
+				opponent = opponent,
+				opp_char_id = opp_char_id,
+				undo = {
+					new_guid = obj.getGUID(),
+					snapback = {pos=C.characters[char_id].bank_pos, rot=board.getRotation()},
+					old_guid = curr_guid,
+				},
+			}
+			if opponent == "" then
+				pending_action.bank = true
+			else
+				pending_action.bank = false
+				pending_action.opp_char_id = opp_char_id
+				local opp_board =  getObjectFromGUID(C.player_boards[opponent])
+				pending_action.undo.snapback.pos = opp_board.positionToWorld(C.player_board_character_location)
+				pending_action.undo.snapback.rot = opp_board.getRotation()
+			end
+			local turn_action = getAvailableAction(pcol, "exchange")
+			if turn_action then
+				player.character_id = char_id
+				setCharacterBonus(pcol)
+				pending_action.action_index = turn_action.index
+				local player_board = getObjectFromGUID(C.player_boards[pcol])
+				local current = getObjectFromGUID(curr_guid)
+				current.setPosition(C.characters[curr_id].bank_pos)
+				current.setRotation(board.getRotation())
+				obj.setPositionSmooth(player_board.positionToWorld(C.player_board_character_location), false, true)
+				obj.setRotation(player_board.getRotation())
+				waitLock(obj)
+				table.insert(player.pending_actions, pending_action)
+				getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=true,undo=true})
+				turn_action.status = "Done"
+				updateDialUI(pcol)
+				local txt = pcol.." exchanges character "
+				if pending_action.bank then txt = txt .. "with bank"
+				else txt = txt .. "with "..opponent end
+				if GD.env.verbose then printToAll(txt) end
+				updateCityScores()
+			else
+				log("ERROR: characterDrop() unexpected: unable to locate unused exchange action for player "..tostring(pcol)) --DEBUG
+				snapBack(obj)
 			end
 		end
 	else
@@ -1443,7 +1481,6 @@ function houseDrop(pcol, obj)
 	--[[TODO: document]]
 	local function placeVillageHouse(obj, node)
 		if env.test.trace then log("placeVillageHouse() "..tostring(obj)..", node "..tostring(node.id)) end
-		-- if env.test.debug then log(node) end
 		table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
 		local pos = board.positionToWorld(Vector(node.center))
 		if GD.game.player_count > 2 then
@@ -1456,7 +1493,6 @@ function houseDrop(pcol, obj)
 		obj.setRotation(board.getRotation())
 		obj.setPosition(pos)
 		waitLock(obj)
-		-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
 	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
@@ -1478,7 +1514,6 @@ function houseDrop(pcol, obj)
 		obj.setPositionSmooth(board.positionToWorld(pos), false, true)
 		table.insert(node.houses[color],obj.getGUID())
 		waitLock(obj)
-		-- Wait.condition(function() obj.setLock(true) end, function() return obj.resting end, 2)
 	end
 	--//////////////////////////////////
 
@@ -1524,7 +1559,6 @@ function houseDrop(pcol, obj)
 			if node.type == "city" then
 				for pcol,placed in pairs(node.houses) do
 					if indexOf(placed, obj.getGUID()) > 0 then
-						log("ignoring drop in same location already placed") 													--DEBUG LOGGING
 						snapBack(obj)
 						return
 					end
@@ -1532,7 +1566,6 @@ function houseDrop(pcol, obj)
 			elseif node.type == "village" then
 				for _,e in ipairs(node.houses) do  --TODO: just use indexOf() here?
 					if e.g == obj.getGUID() then
-						log("ignoring drop in same location already placed") 													--DEBUG LOGGING
 						snapBack(obj)
 						return
 					end
@@ -1621,19 +1654,24 @@ function houseDrop(pcol, obj)
 					local i = indexOf(old_node.houses[pcol], obj.getGUID())
 					if i > 0 then table.remove(old_node.houses[pcol], i)
 					else
-						log("***ERROR: playerUndo() unable to clear house "..obj.getGUID().." from network node "..tostring(pending_action.undo.old_node))
+						log("***ERROR: playerUndo() unable to clear house "..obj.getGUID().." from node "..tostring(old_node.id))  --DEBUG TODO: remove
+					end
+					--unlock player's next last house placed in the city if one
+					if #old_node.houses[pcol] > 0 then
+						getObjectFromGUID(old_node.houses[pcol][#old_node.houses[pcol]]).setLock(false)
 					end
 					updateCityScores()
 				elseif old_node.type == "village" then
-					--BUG don't use nil, use table.remove
 					if old_node.houses[1] and old_node.houses[1].g == obj.getGUID() then
-						-- old_node.houses[1] = nil
 						table.remove(old_node.houses,1)
+						pending_action.undo.old_node_pos = 1
 					elseif old_node.houses[2] and old_node.houses[2].g == obj.getGUID() then
-						-- old_node.houses[2] = nil
 						table.remove(old_node.houses,2)
+						--unlock village pos 1 if player's
+						if old_node.houses[1].c == pcol then getObjectFromGUID(old_node.houses[1].g).setLock(false) end
+						pending_action.undo.old_node_pos = 2
 					else
-						log("*** ERROR: playerUndo() unable to clear house "..obj.getGUID().." from network node "..tostring(pending_action.undo.old_node))
+						log("*** ERROR: playerUndo() unable to clear house "..obj.getGUID().." from node "..tostring(old_node.id))   --DEBUG TODO: remove
 						return
 					end
 				end
@@ -1673,10 +1711,8 @@ function palaceDrop(pcol, obj)
 			local index = #node.palaces + 1
 			local offset = Vector(C.city_palace_offsets[index])
 			pos = Vector(center) - offset
-			log("placing "..color.." palace "..obj.getGUID().." in node "..tostring(node.id))
 			table.insert(node.palaces,{g=obj.getGUID(),c=color,})
 		else
-			log("placing "..color.." palace "..obj.getGUID().." with offset in node "..tostring(node.id).." center")
 			node.center_palace = {g=obj.getGUID(),c=color,}
 		end
 		pos.y = 1.5
@@ -1695,6 +1731,11 @@ function palaceDrop(pcol, obj)
 	end
 	local node = GD.network[node_index]
 	if node.type ~= "city" then
+		snapBack(obj)
+		return
+	end
+	if node.center_palace and #node.palaces == 6 then
+		if GD.env.verbose then broadcastToColor("City palace locations are all full", pcol) end
 		snapBack(obj)
 		return
 	end
@@ -1728,6 +1769,7 @@ function palaceDrop(pcol, obj)
 	end
 	if player.architect_location.current_node == node_index then
 		placePalace(obj, node)
+		table.insert(player.placed_palaces, {g=obj.getGUID(),node=node_index})
 		updateCityScores(node)
 		player.gold = player.gold - cost
 		pending_action.cost = cost
@@ -2044,7 +2086,6 @@ function playerDone(pcol)
 		if player.choosing_extra_action then
 			setExtraAction(pcol)
 		else
-			log("Player clicked Done during action selection")   --TODO: LOGGING
 			player.actions_set = true
 			local all_set = true
 			for _,pdata in pairs(GD.game.players) do
@@ -2112,8 +2153,7 @@ function playerDone(pcol)
 					updateStatusPanel()
 				end
 			elseif action.key == "palace" then
-				log("adding palace "..tostring(action.guid).." to "..pcol.." placed_palaces")
-				table.insert(player.placed_palaces, action.guid)
+				-- table.insert(player.placed_palaces, {g=action.guid,node=action.undo.node_index}) --TODO moving to pending
 				if #player.placed_palaces == 7 then
 					if not(GD.game.game_end_this_round) then
 						GD.game.game_end_this_round = true
@@ -2127,7 +2167,19 @@ function playerDone(pcol)
 			elseif action.key == "move" then
 				local obj = getObjectFromGUID(action.guid)
 				player.placed_houses[obj.getGUID()] = {node=action.undo.node_index, pos=obj.getPosition(), rot=obj.getRotation(),}
-				placedHousesLock(pcol, false)
+				--reposition house in a village if only one left
+				local old_node = GD.network[action.undo.old_node]
+				if old_node.type == "village" then
+					if GD.game.player_count > 2 and #old_node.houses == 1 then
+						local obj = getObjectFromGUID(old_node.houses[1].g)
+						local pos = Vector(old_node.center) + Vector(VILLAGE_OFFSET)
+						local board = getObjectFromGUID(C.board_guid)
+						pos = board.positionToWorld(pos)
+						pos.y = 1.5
+						obj.setPosition(pos)
+						waitLock(obj)
+					end
+				end
 			elseif action.key == "build" then
 				local obj = getObjectFromGUID(action.guid)
 				removeFromPlayerBoard(obj)
@@ -2170,6 +2222,7 @@ function endTurn(pcol)
 	else
 		charactersLock(pcol, true)
 	end
+	if env.test.test_palace_sync then testPlayerPlacedPalaceSync(pcol) end
 	--update round and check for end of round or end of game
 	local index = indexOf(GD.game.remaining_round_players,pcol)
 	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
@@ -2214,10 +2267,11 @@ function playerUndo(pcol)
 	if env.test.trace then log("playerUndo(): "..pcol) end
 	local player = GD.game.players[pcol]
 	local function resetAction(pcol, action)
-		if action.is_free then           --TODO: discreet free build/move action
+		if action.is_free then
 			player.free_action.status = ""
 		else
-			for _,a in pairs(GD.game.players[pcol].turn_actions) do		--TODO: if a.index always matches turn_actions array index, is loop necessary? not sure it always does.
+			--TODO: if a.index always matches turn_actions array index, is loop necessary? not sure it always does.
+			for _,a in pairs(GD.game.players[pcol].turn_actions) do
 				if a.index == action.action_index then a.status = ""; break end
 			end
 		end
@@ -2238,11 +2292,8 @@ function playerUndo(pcol)
 		obj.setLock(false)
 		local node = GD.network[action.undo.node_index]
 		if node.houses[1] and node.houses[1].g == action.guid then
-			--BUG don't use nil, use table.remove
-			-- node.houses[1] = nil
 			table.remove(node.houses,1)
 		elseif node.houses[2] and node.houses[2].g == action.guid then
-			-- node.houses[2] = nil
 			table.remove(node.houses,2)
 		else
 			log("*** ERROR: playerUndo() unable to clear house "..action.guid.."from network node "..tostring(action.undo.node_index))
@@ -2265,19 +2316,16 @@ function playerUndo(pcol)
 			local i = indexOf(node.houses[pcol], action.guid)
 			if i > 0 then
 				table.remove(node.houses[pcol], i)
-			else --DEBUG
+			else
 				log("***ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))  --DEBUG
 				return
 			end
 			updateCityScores(node)
 			updateStatusPanel()
 		else
-			--BUG don't use nil, use table.remove
 			if node.houses[1] and node.houses[1].g == action.guid then
-				-- node.houses[1] = nil
 				table.remove(node.houses,1)
 			elseif node.houses[2] and node.houses[2].g == action.guid then
-				-- node.houses[2] = nil
 				table.remove(node.houses,2)
 			else
 				log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))  --DEBUG
@@ -2302,6 +2350,7 @@ function playerUndo(pcol)
 		old.setLock(false)
 		player.character_id = action.old_char_id
 		setCharacterBonus(pcol, false)
+		updateCityScores()
 		--handle case character had immediate effects
 		if action.character_id == 2 then
 			player.gold = player.gold - 1
@@ -2316,31 +2365,69 @@ function playerUndo(pcol)
 		local obj = getObjectFromGUID(action.undo.guid)
 		obj.setPosition(action.undo.snapback.pos)
 		obj.setRotation(action.undo.snapback.rot)
-		obj.setLock(false)
 		--restore old node
 		local old_node = GD.network[action.undo.old_node]
 		if old_node.type == "city" then
-			table.insert(old_node.houses[obj.getName()], obj.getGUID())
+			local houses = old_node.houses[pcol]
+			--relock player's last placed house before replacing this one
+			if #houses > 0 then getObjectFromGUID(houses[#houses]).setLock(true) end
+			table.insert(houses, obj.getGUID())
+			obj.setLock(false)
 		else
-			table.insert(old_node.houses,{g=obj.getGUID(), c=obj.getName()})
+			local houses = old_node.houses
+			--restore to original village location (1 or 2) index in array
+			if action.undo.old_node_pos == 1 then
+				table.insert(houses, 1, {g=obj.getGUID(), c=pcol})
+				if houses[2] and houses[2].c == pcol then
+					getObjectFromGUID(houses[2].g).setLock(false)
+					waitLock(obj)
+				else
+					obj.setLock(false)
+				end
+			else
+				if #houses > 1 then log("*** ERROR: data inconsistency, too many houses in village node "..tostring(old_node.id)) end --DEBUG
+				table.insert(houses, {g=obj.getGUID(), c=pcol})
+				obj.setLock(false)
+			end
 		end
 		--remove from current node
 		local node = GD.network[action.undo.node_index]
 		if node.type == "city" then
-			local i = indexOf(node.houses[pcol], action.guid)
-			if i > 0 then table.remove(node.houses[pcol], i)
+			local houses = node.houses[pcol]
+			local i = indexOf(houses, action.guid)
+			if i > 0 then table.remove(houses, i)
 			else
 				log("***ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))  --DEBUG
 				return
 			end
+			--unlock player's last placed house if there is one that is not if part of a pending action
+			if #houses > 0 then
+				for i=#houses,1,-1 do
+					local g = houses[i]
+					local unlock = true
+					for _,a in ipairs(player.pending_actions) do
+						if a.guid == g then unlock = false; break end
+					end
+					if unlock then getObjectFromGUID(g).setLock(false); break end
+				end
+			end
 		else
-			--BUG don't set to nil, breaks ipairs, use table.remove
-			if node.houses[1] and node.houses[1].g == action.guid then
-				-- node.houses[1] = nil
-				table.remove(node.houses, 1)
-			elseif node.houses[2] and node.houses[2].g == action.guid then
-				-- node.houses[2] = nil
-				table.remove(node.houses, 2)
+			local houses = node.houses
+			if houses[1] and houses[1].g == action.guid then
+				table.remove(houses, 1)
+				if houses[1] then
+					--move any house that was in pos 2 into pos 1
+					local obj = getObjectFromGUID(houses[1].g)
+					local pos = Vector(node.center) + Vector(VILLAGE_OFFSET)
+					pos = board.positionToWorld(pos)
+					pos.y = 1.5
+					obj.setPosition(pos)
+					waitLock(obj)
+				end
+			elseif houses[2] and houses[2].g == action.guid then
+				table.remove(houses, 2)
+				--unlock pos 1 if player's house
+				if houses[1].c == pcol then getObjectFromGUID(houses[1].g).setLock(false) end
 			else
 				log("*** ERROR: playerUndo() unable to clear house "..action.guid.." from network node "..tostring(action.undo.node_index))  --DEBUG
 				return
@@ -2374,17 +2461,21 @@ function playerUndo(pcol)
 		obj.setRotation(action.undo.snapback.rot)
 		obj.setLock(false)
 		local node = GD.network[action.undo.node_index]
-		log("undo place palace for node "..tostring(action.undo.node_index))
 		if node.center_palace and node.center_palace.g == action.guid then
-			log("setting node center_palace to nil")
 			node.center_palace = nil
 		else
 			for i,e in ipairs(node.palaces) do
 				if e.g == action.guid then
-					log("removing "..tostring(action.guid).." from node.palaces index "..tostring(i))
 					table.remove(node.palaces, i)
 					break
 				end
+			end
+		end
+		--remove from player placed palaces list
+		for i,p in ipairs(player.placed_palaces) do
+			if p.g == action.undo.guid then
+				table.remove(player.placed_palaces, i)
+				break
 			end
 		end
 		resetAction(pcol, action)
@@ -2481,7 +2572,7 @@ function moveMaharaja()
 	updateGovernorTrack()
 end
 
---[[ ********* TODO rank all players *******************
+--[[ ****************************
 Player with most palaces built wins.
 FIrst tie breaker is most gold.
 Second tie breaker is lowest character ID.
@@ -2540,7 +2631,6 @@ function endGame()
 		end
 	end
 	UI.setAttribute("end_game_pnl","active",true)
-
 	--disable all buttons, everything
 	for _,pcol in ipairs(GD.game.player_order) do
 		getObjectFromGUID(C.player_boards[pcol]).call("setState", {active=false,done=false,undo=false,extra_button=false,})
@@ -2550,8 +2640,6 @@ function endGame()
 	end
 	charactersLock("all", true)
 	setGovernorButtons(false)
-
-	log("TODO: rank all players and show a dialog with final ranking")
 end
 
 --[[ ****************************
@@ -2601,57 +2689,6 @@ function rankPlayers()
 		end
 	end
 	return rank
-end
-
---DEBUG functions for testing for phantom palaces
-function testPhantomPalaces()
-	for i,n in ipairs(GD.network) do
-		if n.palaces then
-			if n.center_palace ~= nil then
-				local found = false
-				log("checking center "..tostring(n.center_palace.g))
-				for i,g in ipairs(GD.game.players[n.center_palace.c].placed_palaces) do
-					if n.center_palace.g == g then found = true end
-				end
-				if not(found) then
-					log("Found phantom palace "..tostring(e.g).." at network node center "..tostring(i))
-				end
-			end
-			for j,e in ipairs(n.palaces) do
-				if GD.game.players[e.c] ~= nil 	then
-					log("checking "..tostring(e.g))
-					local found = false
-					for i,g in ipairs(GD.game.players[e.c].placed_palaces) do
-						if e.g == g then found = true end
-					end
-					if not(found) then
-						log("Found phantom palace "..tostring(e.g).." at network node "..tostring(i))
-					end
-				end
-			end
-		end
-	end
-end
-
-function testPlacedPalaces(pcol)
-	log("testing player "..tostring(pcol).." for phantom placed palaces")
-	for i,g in ipairs(GD.game.players[pcol].placed_palaces) do
-		local found = false
-		for i,n in ipairs(GD.network) do
-			if n.palaces then
-				for j,e in ipairs(n.palaces) do
-					if e.g == g then found = true end
-				end
-				if n.center_palace ~= nil then
-					if n.center_palace.g == g then found = true end
-				end
-			end
-			if found then break end
-		end
-		if not(found) then
-			log("********** "..pcol.." placed palace "..tostring(g).." not found in network! ***************")
-		end
-	end
 end
 
 --[[/////////////// Support functions /////////////////////]]
@@ -2720,8 +2757,6 @@ function scoreCity(city)
 		getObjectFromGUID(C.player_boards[place.player]).call("setState",{gold_coins=player.gold})
 		if GD.env.verbose then printToAll(place.player.." recieves 5 gold for city monopoly bonus") end
 	end
-
-	--TODO: show a results dialog ???  or is game log enough?
 end
 
 --[[ ******** TODO: sort on opp ************
@@ -2940,27 +2975,60 @@ end
 
 --[[ *****************************
 Set the locked state of a player's unplayed palaces
+locked: the lock state to set.
+NOTE: Always locks any player's palaces that have been placed. For safety.
 ********************************]]
 function unplayedPalacesLock(pcol, locked)
 	if env.test.trace then log("unplayedPalacesLock()") end
 	locked = locked or false
-	for _,e in ipairs(GD.game.players[pcol].palaces) do
-		if e.g then getObjectFromGUID(e.g).setLock(locked) end
+	local player = GD.game.players[pcol]
+	for _,e in ipairs(player.palaces) do
+		local placed = false
+		for _,p in ipairs(player.placed_palaces) do
+			if p.g == e.g then placed = true; break end
+		end
+		if placed then getObjectFromGUID(e.g).setLock(true)
+		else getObjectFromGUID(e.g).setLock(locked) end
 	end
 end
 
 --[[ *****************************
 Set the locked state of a player's placed houses
+If locking, just lock them all.
+If unlocking, only unlock last house placed in each network location.
+--TODO; maybe take a node id parameter and only process that node?
+	Would cut down on code in undo and house drop for last locked/unlocked?  Or would it?
+	Would definitely make this more complex so maybe not worth it.
 ********************************]]
 function placedHousesLock(pcol, locked)
-	if env.test.trace then log("placedHousesLock()") end
+	if env.test.trace then log("placedHousesLock() "..tostring(pcol)..", "..tostring(locked)) end
 	locked = locked or false
-	for g,_ in pairs(GD.game.players[pcol].placed_houses) do
-		local o = getObjectFromGUID(g)
-		if o then
-			o.setLock(locked)
-		else
-			log("***ERROR: unable to unlock placed house for "..tostring(g))
+	if locked then
+		--just lock all of them, usually at end of a turn.
+		for g,_ in pairs(GD.game.players[pcol].placed_houses) do
+			local o = getObjectFromGUID(g)
+			if o then
+				o.setLock(true)
+			else
+				log("***ERROR: placedHousesLock() unable to set lock state on placed house for "..tostring(g))  --DEBUG  TODO: remove
+			end
+		end
+	else
+		--crawl the netwok, only unlock last placed.  Usually at beginning of a turn.
+		for _,n in ipairs(GD.network) do
+			if n.type == "city" then
+				--unlock last house placed for player in cities
+				if #n.houses[pcol] > 0 then
+					getObjectFromGUID(n.houses[pcol][#n.houses[pcol]]).setLock(false)
+				end
+			elseif n.type == "village" then
+				--try village pos 2 first, if not, try pos 1
+				if n.houses[2] and n.houses[2].c == pcol then
+					getObjectFromGUID(n.houses[2].g).setLock(false)
+				elseif n.houses[1] and n.houses[1].c == pcol then
+					getObjectFromGUID(n.houses[1].g).setLock(false)
+				end
+			end
 		end
 	end
 end
@@ -3100,12 +3168,12 @@ function getPlacedObjectSnap(guid)
 				local snap = player.placed_houses[guid]
 				return snap.pos, snap.rot
 			end
-		elseif obj.memo == "palace" then
-			return player.placed_palaces[guid]
 		elseif obj.memo == "architect" then
 			if obj.getName() == pcol then
 				return GD.game.players[pcol].architect_location.snap_pos
 			end
+		else
+			log("**** ERROR: getPlacedObjectSnap(): improper object type '"..tostring(obj.memo).."'")
 		end
 	end
 end
@@ -3333,29 +3401,6 @@ function updateDialUI(pcol)
 	end
 end
 
---[[ *****************************
-Set set supplied lock state on objects respective to turn actions for player
-pcol: the player color
-state; Boolean, lock state: true to lock, false to unlock.
-********************************]]
-function updateLockStates(pcol, state)
-	if env.test.trace then log("updateLockStates() "..pcol..", "..tostring(state)) end
-	local player = GD.game.players[pcol]
-	for _,a in ipairs(player.turn_actions) do
-		if a.id == "palace" then
-			unplayedPalacesLock(pcol, state)
-		elseif a.id == "build" then
-			buildPoolLock(pcol, state)
-		elseif a.id == "move" then
-			placedHousesLock(pcol, state)
-		elseif a.id == "track" then
-			setGovernorButtons(state)
-		elseif a.id == "exchange" then
-			charactersLock(pcol, state)
-		end
-	end
-end
-
 --[[/////////////// External call functions /////////////////////]]
 
 --[[ ****************************
@@ -3404,7 +3449,14 @@ function dialExtraAction(params)
 			end
 		end
 		table.insert(player.pending_actions, pending_action)
-		updateLockStates(params.player_color, false)
+		for _,a in ipairs(player.turn_actions) do
+			if a.id == "palace" then unplayedPalacesLock(params.player_color, false)
+			elseif a.id == "build" then buildPoolLock(params.player_color, false)
+			elseif a.id == "move" then placedHousesLock(params.player_color, false)
+			elseif a.id == "track" then setGovernorButtons(true)
+			elseif a.id == "exchange" then charactersLock(params.player_color, false)
+			end
+		end
 		getObjectFromGUID(C.player_pawns[params.player_color]).setLock(false)
 	elseif params.action == "cancel" then
 		--undo the extra action token use (add one back, delete any 'pointer-extra' turn action(s) that may have been added from dial clicks)
@@ -3417,7 +3469,14 @@ function dialExtraAction(params)
 		player.turn_actions = temp
 		for i,a in ipairs(player.turn_actions) do a.index = i end  --fixup index
 		updateDialUI(params.player_color)
-		updateLockStates(params.player_color, false)
+		for _,a in ipairs(player.turn_actions) do
+			if a.id == "palace" then unplayedPalacesLock(params.player_color, false)
+			elseif a.id == "build" then buildPoolLock(params.player_color, false)
+			elseif a.id == "move" then placedHousesLock(params.player_color, false)
+			elseif a.id == "track" then setGovernorButtons(true)
+			elseif a.id == "exchange" then charactersLock(params.player_color, false)
+			end
+		end
 		getObjectFromGUID(C.player_pawns[params.player_color]).setLock(false)
 	else
 		log("*** ERROR: dialExtraAction() unknown action param "..tostring(params.action))
@@ -3621,6 +3680,52 @@ function buildRouteTable(start_id, dest_id)
 end
 
 --[[/////////////// DEVELOPMENTAL STUFF ///////////////////////]]
+
+--DEBUG function for testing for placed_palaces data integrity with network data.
+function testPlayerPlacedPalaceSync(pcol)
+	assert(pcol, "****ERROR: testPlayerPlacedPalaceSync(): missing player color")
+	local player=GD.game.players[pcol]
+	local fail_test = false
+	local seen = {}
+	for i,p in ipairs(player.placed_palaces) do
+		if contains(seen, p.g) then
+			log("---------> "..pcol.." duplicate palace guid found in player placed_palaces: "..tostring(p.g))
+			fail_test = true
+		else
+			table.insert(seen, p.g)
+		end
+		local found = false
+		for j,n in ipairs(GD.network) do
+			if n.type == "city" then
+				if n.center_palace then
+					if n.center_palace.g == p.g then
+						found = true
+						if p.node ~= n.id then
+							log("---------> "..pcol.." placed palace mismatch; guid: "..tostring(p.g)..", node center: "..tostring(n.id))
+							fail_test = true
+						end
+					end
+				end
+				if not(found) then
+					for k,pp in ipairs(n.palaces) do
+						if pp.g == p.g then
+							found = true
+							if p.node ~= n.id then
+								log("---------> "..pcol.." placed palace mismatch; guid: "..tostring(p.g)..", node: "..tostring(n.id))
+								fail_test = true
+							end
+							break
+						end
+					end
+				end
+			end
+			if found then break end
+		end
+	end
+	if fail_test then
+		log(GD.game.players[pcol])
+	end
+end
 
 function testCityHouses(pcol, city_name)
 	log("put selected houses in "..city_name)

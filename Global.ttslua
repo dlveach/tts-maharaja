@@ -19,7 +19,6 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** MVP FEATURES ***
 
-	--TODO: Hide help text when choosing actions and click done.  Show again if clicked modify button.  Visual cue to others who's still choosing.
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
 	--TODO: set turn order marker dark (brown?) when turn has been taken.  Visual cue to others.
 
@@ -76,6 +75,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 	--TODO: DONE TESTING allow player to choose if free action should be used vs paid action. Idea: make it clickable to signify preference?
 	--TODO: DONE TESTING add player prefs dialog.
 	--TODO: DONE TEST end game
+	--TODO: DONE TESTING Hide help text when choosing actions and click done.  Show again if clicked modify button.  Visual cue to others who's still choosing.
 
 ==========================================================================================]]
 
@@ -585,7 +585,7 @@ function dialModifyClick(player, btn, id)
 	dial.call("hideMe")
 	dial.call("enableDialButtons")
 	if dial.is_face_down then dial.call("flipMe") end
-	getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true,undo=false})
+	getObjectFromGUID(C.player_boards[player.color]).call("setState",{done=true,undo=false,active=true})
 end
 
 --[[ *****************************
@@ -2106,7 +2106,7 @@ function playerDone(pcol)
 				dial.call("enableBackButton")
 				dial.call("disableDialButtons")
 				if not(dial.is_face_down) then dial.call("flipMe") end
-				getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false})
+				getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, active=false})
 			end
 		end
 	elseif GD.game.stage == "player_turns" then --Done during other game stages

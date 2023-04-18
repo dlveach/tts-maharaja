@@ -55,7 +55,7 @@
   <TableLayout columnWidths="100 70 0">
     <Row preferredHeight="100">
       <Cell padding="10 10 5 15">
-        <Panel color="Blue" image="Sprites/Layout/Base">
+        <Panel id="info_turn_order_pnl" color="Blue" image="Sprites/Layout/Base">
           <Text id="turn_order" fontSize="60" color="rgb(1,1,0)" text="-" />
         </Panel>
       </Cell>

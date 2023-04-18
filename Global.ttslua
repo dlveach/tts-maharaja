@@ -20,7 +20,6 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 *** MVP FEATURES ***
 
 	--TODO: implement route sorting on opponent selection (button in header of dialog)
-	--TODO: set turn order marker dark (brown?) when turn has been taken.  Visual cue to others.
 
 *** OTHER STUFF ***
 
@@ -76,6 +75,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 	--TODO: DONE TESTING add player prefs dialog.
 	--TODO: DONE TEST end game
 	--TODO: DONE TESTING Hide help text when choosing actions and click done.  Show again if clicked modify button.  Visual cue to others who's still choosing.
+	--TODO: DONE TESTING set turn order marker dark (brown?) when turn has been taken.  Visual cue to others.
 
 ==========================================================================================]]
 
@@ -1210,6 +1210,7 @@ function setStartingCharacter(action)
 			end
 			GD.game.players[pcol].init_placements = 4
 			p.active = (pcol == GD.game.current_player_color)
+			p.has_actions = true
 			getObjectFromGUID(C.player_boards[pcol]).call("setState",p)
 		end
 		GD.game.players_init_placed = 0
@@ -1287,7 +1288,7 @@ function beginNextRound()
 		local txt = "Secretly choose turn actions and confirm with Done.\n"  --TODO: make a constant?
 		txt = txt .. "Player turns will begin once all have confirmed.\n"
 		txt = txt .. "Until then selections can be modified."
-		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,done=false,undo=false,help_text=txt})
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,has_actions=true,done=false,undo=false,help_text=txt})
 		table.insert(GD.game.remaining_round_players, pcol)
 	end
 end
@@ -2048,14 +2049,19 @@ function startPlayerTurn(pcol)
 	state.active = true
 	state.done = true
 	state.extra_actions = GD.game.players[pcol].extra_actions
+	state.has_actions = GD.game.players[pcol].has_actions
 	state.extra_button = state.extra_actions > 0
 	local txt = "Execute actions in any order.\n" 			--TODO: make this a constant?
 	txt = txt.."May move Architect at any time.\n"
 	txt = txt.."All required actions must be executed.\n"
 	state.help_text = txt..C.character_bonus_descriptions[player.character_id]
 	getObjectFromGUID(C.player_boards[pcol]).call("setState",state)
+	state.active = false
+	state.done = false
+	state.undo = false
 	for _,p in ipairs(GD.game.player_order) do
-		if p ~= pcol then getObjectFromGUID(C.player_boards[p]).call("setState") end --set everyone else inactive
+		state.has_actions = GD.game.players[p].has_actions
+		if p ~= pcol then getObjectFromGUID(C.player_boards[p]).call("setState",state) end
 	end
 end
 
@@ -2235,7 +2241,7 @@ function endTurn(pcol)
 		end
 	else
 		if GD.env.verbose then broadcastToAll("Waiting on a player to select a replacement character") end
-		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=false,done=false,undo=false})
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=false,has_actions=false,done=false,undo=false})
 	end
 end
 

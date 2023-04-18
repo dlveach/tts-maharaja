@@ -48,6 +48,7 @@ function onLoad(saved_data)
     GD.state = {}
     GD.state.dormant = true
     GD.state.active_player = false
+    GD.state.has_actions = false
     GD.state.done = false
     GD.state.undo = false
     GD.state.turn_order = 0
@@ -98,6 +99,13 @@ function updateUI()
       self.UI.setAttribute("help_txt","text", GD.state.help_text)
       self.UI.setAttribute("help_txt_pnl","active", GD.state.active_player)
     end
+    if GD.state.has_actions then
+      self.UI.setAttribute("info_turn_order_pnl","color","Blue")
+      self.UI.setAttribute("turn_order","color","rgb(1,1,0)")
+    else
+      self.UI.setAttribute("info_turn_order_pnl","color","Brown")
+      self.UI.setAttribute("turn_order","color","Gray")
+    end
   end
   if GD.state.active_player and GD.state.extra_button and GD.state.extra_actions > 0 then
     if self.getButtons() == nil then
@@ -133,6 +141,7 @@ function setState(params)
     if params.gold_coins != nil then GD.state.gold_coins = params.gold_coins end
     if params.help_text != nil then GD.state.help_text = params.help_text end
     if params.extra_button != nil then GD.state.extra_button = params.extra_button end
+    if params.has_actions != nil then GD.state.has_actions = params.has_actions end
   else
     --defaults to non-active player if no params supplied
     GD.state.active_player = false

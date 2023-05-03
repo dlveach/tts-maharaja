@@ -106,7 +106,7 @@ C.player_board_character_location = Vector(1.205481, 0.05, -0.207062)
 
 --TODO: should bank_pos be local to world vs local to board (as is)?
 C.characters = {
-  {g="69c90c", name="Mogul", city="Ahaadabad", bank_pos=Vector(8.365609, 3.621516, 20.141489),},
+  {g="69c90c", name="Mogul", city="Ahmadabad", bank_pos=Vector(8.365609, 3.621516, 20.141489),},
   {g="3e347b", name="Trader", city="Khajuraho", bank_pos=Vector(5.391432, 3.721516, 20.140337),},
   {g="5664d4", name="Sadhu", city="Agra", bank_pos=Vector(2.450038, 3.621516, 20.133562),},
   {g="ad74d6", name="Wandering Monk", city="Jodupur", bank_pos=Vector(-0.518785, 3.621516, 20.128057),},
@@ -131,7 +131,7 @@ C.cities = {
   Delhi = {node=7, character=5, maharaja_pos=Vector(-0.653244, 1.5, -0.548886),},
   Jodupur = {node=18, character=4, maharaja_pos=Vector(0.953704, 1.5, 0.109871),},
   Agra = {node=20, character=3, maharaja_pos=Vector(-0.847647, 1.5, 0.122426),},
-  Ahaadabad = {node=30, character=1, maharaja_pos=Vector(0.700924, 1.5, 0.761601),},
+  Ahmadabad = {node=30, character=1, maharaja_pos=Vector(0.700924, 1.5, 0.761601),},
   Khajuraho = {node=35, character=2, maharaja_pos=Vector(-0.631103, 1.5, 0.811526),},
 }
 
@@ -141,7 +141,7 @@ C.governors = {
   {city="Delhi",node=7,},
   {city="Jodupur",node=18,},
   {city="Agra",node=20,},
-  {city="Ahaadabad",node=30,},
+  {city="Ahmadabad",node=30,},
   {city="Khajuraho",node=35,},
 }
 

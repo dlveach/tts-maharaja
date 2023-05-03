@@ -34,6 +34,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** BUGs ***
 
+	*BUG Ahmadabad spelling
 	*BUG: Repro: have extra action and one pointer action for exchange. use extra action for another exchange and do it.  Then undo all the way out to turn start.
 					Result is tiles not unlocked for the original pointer excnage action.  WORKAROUND: use rewind time to just before start of turn.
 	???BUG: (saw more than once but repro not yet idenfied) duplicates in player.placed_palaces table.  Maybe came from reloading & testing?  Not sure.
@@ -42,6 +43,8 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** Stuff that is done ***
 
+	****BUG FIXED TESTING able to select extra action during action selection phase.
+	**BUG FIXED TESTING play with DP: both player boards were geting updated for extra actions.  Data was sane, just a UI bug.  Somehow updating both player boards.
 	***BUG: FIXED TESTING need to add palace to player.placed_palaces in pending action & undo.
 	***BUG: FIXED TESTING placed palaces getting unlocked in unplayedPalacesLock().  Cause: not checking player.placed_palaces in fn.
 	****BUG: FIXED TESTING setting gov buttons in updateLockStates is bad.  Remove it and set explicity.
@@ -86,10 +89,10 @@ env.test.debug = false
 env.test.in_dev = false
 env.test.force_fresh_save = false
 env.test.save_positions = false
-env.test.auto_switch = true
+-- env.test.auto_switch = true
 env.test.test_palace_sync = true --TESTING player placed palace sync with network palaces.  Looking for bug repro.
 
-env.test.players = {"Blue","Red","Yellow","Purple","Green",}
+-- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
 -- env.test.players = {"Green","Blue",}
@@ -1288,7 +1291,7 @@ function beginNextRound()
 		local txt = "Secretly choose turn actions and confirm with Done.\n"  --TODO: make a constant?
 		txt = txt .. "Player turns will begin once all have confirmed.\n"
 		txt = txt .. "Until then selections can be modified."
-		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,has_actions=true,done=false,undo=false,help_text=txt})
+		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=true,has_actions=true,extra_button=false,done=false,undo=false,help_text=txt})
 		table.insert(GD.game.remaining_round_players, pcol)
 	end
 end
@@ -2045,23 +2048,25 @@ function startPlayerTurn(pcol)
 	if track then setGovernorButtons(true) end
 	if char then charactersLock(pcol, false) end
 	--enable player board for actions
-	local state = {undo=false,}
-	state.active = true
-	state.done = true
-	state.extra_actions = GD.game.players[pcol].extra_actions
-	state.has_actions = GD.game.players[pcol].has_actions
-	state.extra_button = state.extra_actions > 0
 	local txt = "Execute actions in any order.\n" 			--TODO: make this a constant?
 	txt = txt.."May move Architect at any time.\n"
 	txt = txt.."All required actions must be executed.\n"
-	state.help_text = txt..C.character_bonus_descriptions[player.character_id]
-	getObjectFromGUID(C.player_boards[pcol]).call("setState",state)
-	state.active = false
-	state.done = false
+	local state = {}
 	state.undo = false
 	for _,p in ipairs(GD.game.player_order) do
 		state.has_actions = GD.game.players[p].has_actions
-		if p ~= pcol then getObjectFromGUID(C.player_boards[p]).call("setState",state) end
+		state.extra_actions = GD.game.players[p].extra_actions
+		state.gold = GD.game.players[p].gold
+		state.extra_button = state.extra_actions > 0
+		state.help_text = txt..C.character_bonus_descriptions[player.character_id]
+		if p == pcol then
+			state.active = true
+			state.done = true
+		else
+			state.active = false
+			state.done = false
+		end
+		getObjectFromGUID(C.player_boards[p]).call("setState",state)
 	end
 end
 
@@ -2233,6 +2238,7 @@ function endTurn(pcol)
 	local index = indexOf(GD.game.remaining_round_players,pcol)
 	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
 	table.remove(GD.game.remaining_round_players,index)
+	local player_board = getObjectFromGUID(C.player_boards[pcol])
 	if not(GD.game.wait_for_character_replace) then
 		if #GD.game.remaining_round_players == 0 then
 			finishCurrentRound()
@@ -2241,7 +2247,7 @@ function endTurn(pcol)
 		end
 	else
 		if GD.env.verbose then broadcastToAll("Waiting on a player to select a replacement character") end
-		getObjectFromGUID(C.player_boards[pcol]).call("setState",{active=false,has_actions=false,done=false,undo=false})
+		player_board.call("setState",{active=false,has_actions=false,done=false,undo=false})
 	end
 end
 

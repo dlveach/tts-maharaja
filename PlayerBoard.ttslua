@@ -27,7 +27,6 @@ function onLoad(saved_data)
   assert(env, "*** ERROR: no env from Global")
   GD = {}
   GD.color = self.getName()
-
   --set button ids for this board
   local xml = self.UI.getXmlTable()
   local btn = getXmlElement("done_btn",xml)
@@ -36,8 +35,11 @@ function onLoad(saved_data)
   if btn then btn.attributes.id = GD.color.."_extraAction_btn" end
   btn = getXmlElement("undo_btn",xml)
   if btn then btn.attributes.id = GD.color.."_undo_btn" end
+  btn = getXmlElement("extra_action_set_btn",xml)
+  if btn then btn.attributes.id = GD.color.."_extra_action_set_btn" end
+  btn = getXmlElement("extra_action_cancel_btn",xml)
+  if btn then btn.attributes.id = GD.color.."_extra_action_cancel_btn" end
   self.UI.setXmlTable(xml)
-
   --restore any saved data or setup fresh data
   if saved_data ~= "" then
     if env.test.trace then log(gid.."onLoad(): Loading from saved state") end
@@ -56,6 +58,10 @@ function onLoad(saved_data)
     GD.state.extra_button = false
     GD.state.gold_coins = 0
     GD.state.help_text = ""
+    GD.state.player_actions_UI = false
+    GD.state.hide_player_actions = true
+    GD.state.extra_action_UI = false
+    GD.state.extra_action_set_button = false
   end
   updateUI()
   if UI_TEST then
@@ -63,6 +69,8 @@ function onLoad(saved_data)
     self.UI.setAttribute("doneBtnPanel","active", true)
     self.UI.setAttribute("undoBtnPanel","active", true)
     self.UI.setAttribute("helpTextPanel","active", true)
+    self.UI.setAttribute("player_actions_panel","active", true)
+    self.UI.setAttribute("extra_action_panel","active", true)
   end
 end
 
@@ -84,7 +92,26 @@ function updateUI()
   if env.test.trace then log(gid.."updateUI()") end
   if GD.state.dormant then
     self.UI.setAttribute("info_pnl","active", false)
+    self.UI.setAttribute("player_actions_panel","active", false)
+    self.UI.setAttribute("extra_action_panel","active", false)
   else
+    if GD.state.active_player and GD.state.player_actions_UI then
+      self.UI.setAttribute("player_actions_panel","active", true)
+      if GD.state.hide_player_actions then
+        self.UI.setAttribute("player_actions_panel","visibility", GD.color)
+      else
+        self.UI.setAttribute("player_actions_panel","visibility", "")
+      end
+    else
+      self.UI.setAttribute("player_actions_panel","active", false)
+    end
+    if GD.state.active_player and GD.state.extra_action_UI then
+      self.UI.setAttribute("extra_action_panel","active", true)
+      self.UI.setAttribute("extra_action_set_pnl","active", GD.state.extra_action_set_button)
+    else
+      self.UI.setAttribute("extra_action_panel","active", false)
+    end
+
     self.UI.setAttribute("info_pnl","active", true)
     if GD.state.turn_order > 0 then
       self.UI.setAttribute("turn_order","text", tostring(GD.state.turn_order))
@@ -142,6 +169,10 @@ function setState(params)
     if params.help_text != nil then GD.state.help_text = params.help_text end
     if params.extra_button != nil then GD.state.extra_button = params.extra_button end
     if params.has_actions != nil then GD.state.has_actions = params.has_actions end
+    if params.player_actions_UI != nil then GD.state.player_actions_UI = params.player_actions_UI end
+    if params.extra_action_UI != nil then GD.state.extra_action_UI = params.extra_action_UI end
+    if params.extra_action_set_button != nil then GD.state.extra_action_set_button = params.extra_action_set_button end
+    if params.hide_actions != nil then GD.state.hide_player_actions = params.hide_actions end
   else
     --defaults to non-active player if no params supplied
     GD.state.active_player = false

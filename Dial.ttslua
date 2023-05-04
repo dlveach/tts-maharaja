@@ -62,7 +62,6 @@ function onLoad(saved_data)
     if GD.state.back_button_enabled then enableBackButton() else disableBackButton() end
     if GD.state.hidden then hideMe() else showMe() end
     if GD.state.action_UI_enabled then enableActionUI() else disableActionUI() end
-    self.UI.setAttribute("extra_action_panel", "active", GD.state.extra_action_UI_enabled)
 
   else
     if env.test.trace then log(gid..": onLoad(): Loading from fresh state") end
@@ -130,7 +129,10 @@ function reset()
   end
   decals[1].rotation.z = rot.z
   decals[2].rotation.z = rot.z
-  if extra > 0 then table.remove(decals,extra) end  --TODO: need this?  use removeExtraActionPointer() insetead?
+  if extra > 0 then
+    table.remove(decals,extra)
+  end
+  GD.state.extra_action = false
   self.setDecals(decals)
 end
 
@@ -146,18 +148,15 @@ function removeExtraActionPointer()
   end
   if extra > 0 then table.remove(decals,extra) end
   self.setDecals(decals)
+  GD.state.extra_action = false
 end
 
 --[[ *****************************
 Enable extra action
 ********************************]]
-function enableExtraActionButtons()
-  if env.test.trace then log(gid..": enableExtraActionButtons()") end
-  GD.state.extra_action_UI_enabled = true
+function enableExtraActionPointer()
+  if env.test.trace then log(gid..": enableExtraActionPointer()") end
   enableDialButtons()
-  self.UI.setAttribute("extra_action_set_pnl","active",false)
-  self.UI.setAttribute("extra_action_panel", "active", GD.state.extra_action_UI_enabled)
-  --add the extra pointer if not present --TODO: is it ever present when this is called?  if not remove check
   local decals = self.getDecals()
   local extra = false
   for i,decal in ipairs(decals) do
@@ -170,39 +169,6 @@ function enableExtraActionButtons()
     self.addDecal(p)
   end
   GD.state.extra_action = true
-end
-
---[[ *****************************
-Disable extra Action
-********************************]]
-function disableExtraActionButtons()
-  if env.test.trace then log(gid..": disableExtraActionButtons()") end
-  GD.state.extra_action_UI_enabled = false
-  disableDialButtons()
-  self.UI.setAttribute("extra_action_panel", "active", GD.state.extra_action_UI_enabled)
-  GD.state.extra_action  = false
-end
-
---[[ *****************************
-Handle click on Set or Cancel extra action.
-Validate player color and pass through to Global
-********************************]]
-function extraActionBtnClick(player, btn, id)
-  if env.test.trace then log(gid..": extraActionBtnClick() "..player.color..", "..id) end
-  if player.color ~= GD.color then return end
-  local action = Split(id,"_")[3]
-  if action == "set" then
-    Global.call("dialExtraAction",{action="set",player_color=player.color,})
-    disableExtraActionButtons()
-  elseif action == "cancel" then
-    disableExtraActionButtons()
-    removeExtraActionPointer()
-    Global.call("dialExtraAction",{action="cancel",player_color=player.color,})
-  else
-    log(gid..": ***ERROR: unknown extra action button id")
-    return
-  end
-  disableDialButtons()
 end
 
 --[[ *****************************
@@ -250,7 +216,7 @@ Enable dial action UI
 ********************************]]
 function enableActionUI()
   if env.test.trace then log(gid..": enableActionUI()") end
-  self.UI.setAttribute("player_actions_panel","active",true)
+  -- self.UI.setAttribute("player_actions_panel","active",true) --TODO: move UI
   GD.state.action_UI_enabled = true
 end
 
@@ -259,7 +225,7 @@ Disable dial action UI
 ********************************]]
 function disableActionUI()
   if env.test.trace then log(gid..": enableActionUI()") end
-  self.UI.setAttribute("player_actions_panel","active",false)
+  -- self.UI.setAttribute("player_actions_panel","active",false) --TODO: move UI
   GD.state.action_UI_enabled = false
 end
 
@@ -331,7 +297,7 @@ Only visible to owning player.
 function hideMe()
   if env.test.trace then log(gid..":hideMe()") end
   self.setInvisibleTo(GD.hide_from_players)
-  self.UI.setAttribute("player_actions_panel", "visibility", GD.color)
+  -- self.UI.setAttribute("player_actions_panel", "visibility", GD.color) --TODO: move UI
   GD.state.hidden = true
 end
 
@@ -341,7 +307,7 @@ Show this dial to all players.
 function showMe()
   if env.test.trace then log(gid..":showMe()") end
   self.setInvisibleTo({})
-  self.UI.setAttribute("player_actions_panel", "visibility", "")
+  -- self.UI.setAttribute("player_actions_panel", "visibility", "") --TODO: move UI
   GD.state.hidden = false
 end
 

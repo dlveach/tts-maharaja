@@ -6,50 +6,174 @@
 <Defaults>
 
   <Button
-        hoverClass="hover"
-        pressClass="press"
-        selectClass="select"
-        onClick="Global/playerBoardClick"
-        image="Sprites/Layout/Button"
-        color="Blue" />
+    hoverClass="hover"
+    pressClass="press"
+    selectClass="select"
+    onClick="Global/playerBoardClick"
+    image="Sprites/Layout/Button"
+    color="Blue" />
+
+  <Button class="extraActionButton"
+    hoverClass="hover"
+    pressClass="press"
+    selectClass="select"
+    onClick="Global/extraActionClick"
+    image="Sprites/Layout/Button"
+    color="Blue" />
+
   <Button class="hover"
-        color="Cyan" />
+    color="Cyan" />
   <Button class="press"
-        color="White" />
+    color="White" />
   <Button class="select"
-        color="White" />
+    color="White" />
 
   <TableLayout
-        useGlobalCellPadding="false"
-        rowBackgroundColor="rgba(0,0,0,0)" />
+    useGlobalCellPadding="false"
+    rowBackgroundColor="rgba(0,0,0,0)" />
 
   <Row
-        dontUseTableRowBackground="true"
-        color="rgba(0,0,0,0)"  />
+    dontUseTableRowBackground="true"
+    color="rgba(0,0,0,0)"  />
 
   <Cell
-        dontUseTableCellBackground="true" />  <!-- false to show grid lines -->
+    dontUseTableCellBackground="true" />  <!-- false to show grid lines -->
 
   <Panel raycastTarget="false" />
 
   <Panel class="infoPanel"
-        active="false"
-        color="rgba(0,0,0,0)"
-        position="85 -180 -10"
-        height="175" width="590"
-        rotation="0 0 180"
-        scale="1 1" />  <!-- set color to rgba(0,0,0,0.4) for development -->
+    active="false"
+    color="rgba(0,0,0,0)"
+    position="85 -180 -10"
+    height="175" width="590"
+    rotation="0 0 180"
+    scale="1 1" />  <!-- set color to rgba(0,0,0,0.4) for development -->
 
   <Panel class="helpPanel"
-        color="Blue"
-        image="Sprites/Layout/Base"
-        padding="5 5 5 5" />
+    color="Blue"
+    image="Sprites/Layout/Base"
+    padding="5 5 5 5" />
 
   <Text
-        color="rgb(1,1,0)"
-        textShadow="rgba(0,0,0,0.6)" />
+    color="rgb(1,1,0)"
+    textShadow="rgba(0,0,0,0.6)" />
 
 </Defaults>
+
+<Panel id="extra_action_panel" active="false"
+  height="60" width="400"
+  color="rgb(0,0,0,0)"
+  rotation="0 0 180"
+  scale="0.5 0.5"
+  position="330 -180 -10">
+  <TableLayout columnWidths="0 200 0">
+    <Row>
+      <Cell padding="0 0 0 0">
+        <Panel id="extra_action_set_pnl" color="rgba(0,0,0,0)" >
+          <Button id="extra_action_set_btn" class="extraActionButton">
+            <Text fontSize="24" text="Set"/>
+          </Button>
+        </Panel>
+      </Cell>
+      <Cell/>
+      <Cell padding="0 0 0 0">
+        <Panel id="extra_action_cancel_pnl" color="rgba(0,0,0,0)" >
+          <Button id="extra_action_cancel_btn" class="extraActionButton">
+            <Text fontSize="24" text="Cancel"/>
+          </Button>
+        </Panel>
+      </Cell>
+    </Row>
+  </TableLayout>
+</Panel>
+
+<Panel id="player_actions_panel" active="false"
+  color="Blue"
+  image="Sprites/Layout/Base"
+  position="330 90 -5"
+  height="310" width="410"
+  rotation="0 0 180"
+  scale="0.5 0.5"
+  padding="10 10 10 10"
+  raycastTarget="false">
+  <Panel color="#031427">
+    <TableLayout columnWidths="100 0">
+      <Row preferredHeight="35" >
+        <Cell padding="0 0 0 5" columnSpan="2" >
+          <Image image="Sprites/Outline_With_Background" color="#191E6B">
+            <Text fontSize="16" text="Reqired Actions"/>
+          </Image>
+        </Cell>
+      </Row>
+      <Row id="row_action_1" preferredHeight="30" active="false">
+        <Cell padding="0 0 0 0">
+          <Text id="status_text_1" fontSize="16" text="Required"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text id="action_text_1" class="actionText" text="Modify the Governor Track"/>
+        </Cell>
+      </Row>
+      <Row id="row_action_2" preferredHeight="30" active="false">
+        <Cell padding="0 0 0 0">
+          <Text id="status_text_2" fontSize="16" text="Required"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text id="action_text_2" class="actionText" text="Get 2 Gold"/>
+        </Cell>
+      </Row>
+      <Row id="row_action_3" preferredHeight="30" active="false">
+        <Cell padding="0 0 0 0">
+          <Text id="status_text_3" fontSize="16" text="Required"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text id="action_text_3" class="actionText" text="Quarry 2 Houses into the pool"/>
+        </Cell>
+      </Row>
+      <Row id="row_action_4" preferredHeight="30" active="false">
+        <Cell padding="0 0 0 0">
+          <Text id="status_text_4" fontSize="16" text="Required"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text id="action_text_4" class="actionText" text="Get 2 Gold from the bank"/>
+        </Cell>
+      </Row>
+      <Row id="row_action_5" preferredHeight="30" active="false">
+        <Cell padding="0 0 0 0">
+          <Text id="status_text_5" fontSize="16" text="Required"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text id="action_text_5" class="actionText" text="Build a House (City)"/>
+        </Cell>
+      </Row>
+      <Row id="row_action_6" preferredHeight="30" active="false">
+        <Cell padding="0 0 0 0">
+          <Text id="status_text_6" fontSize="16" text="Required"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text id="action_text_6" class="actionText" text="Build a House (City/Village)"/>
+        </Cell>
+      </Row>
+      <Row preferredHeight="35">
+        <Cell padding="0 0 5 5" columnSpan="2">
+          <Image image="Sprites/Outline_With_Background" color="#191E6B">
+            <Text fontSize="16" text="Optional Actions"/>
+          </Image>
+        </Cell>
+      </Row>
+      <Row id="row_action_7" preferredHeight="30" active="false">
+        <Cell padding="10 10 0 0">
+          <Button id="free_action_btn" class="freeActionButton">
+            <Text id="free_action_btn_txt" fontSize="12" text="Free"/>
+          </Button>
+          <Text id="status_text_7" fontSize="16" text="Done" active="false"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text id="action_text_7" class="actionText" text="Build/Move a house for free"/>
+        </Cell>
+      </Row>
+    </TableLayout>
+  </Panel>
+</Panel>
 
 <Panel id="info_pnl" class="infoPanel">
   <TableLayout columnWidths="100 70 0">

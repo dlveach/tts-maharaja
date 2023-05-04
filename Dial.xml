@@ -12,7 +12,7 @@
         rotation="0 0 0"
         scale="1 1" />
 
-  <Panel class="playerPanel"
+  <!--Panel class="playerPanel"
         active="false"
         color="Blue"
         image="Sprites/Layout/Base"
@@ -22,7 +22,7 @@
         scale="1 1"
         padding="10 10 10 10"
         raycastTarget="false"
-        />
+        /-->
 
   <Button class="dialButton"
         hoverClass="hover"
@@ -40,13 +40,13 @@
         image="Sprites/Layout/Button"
         color="Blue" />
 
-  <Button class="extraActionButton"
+  <!--Button class="extraActionButton"
     hoverClass="hover"
     pressClass="press"
     selectClass="select"
     onClick="extraActionBtnClick"
     image="Sprites/Layout/Button"
-    color="Blue" />
+    color="Blue" /-->
 
   <Button class="freeActionButton"
     hoverClass="hover"
@@ -97,7 +97,7 @@
   </Button>
 </Panel>
 
-<Panel id="extra_action_panel" active="false"
+<!--Panel id="extra_action_panel" active="true"
   height="60" width="400"
   color="rgb(0,0,0,0)"
   rotation="0 0 180"
@@ -124,7 +124,7 @@
   </TableLayout>
 </Panel>
 
-<Panel id="player_actions_panel" class="playerPanel">
+<Panel id="player_actions_panel" class="playerPanel" active="true">
   <Panel color="#031427">
     <TableLayout columnWidths="100 0">
       <Row preferredHeight="35" >
@@ -202,7 +202,7 @@
       </Row>
     </TableLayout>
   </Panel>
-</Panel>
+</Panel-->
 
 <Panel class="buttonPanel" id="dialBtnPnl_1" position="0 140 -10" >
   <Button class="dialButton" id="dialBtn_1" />

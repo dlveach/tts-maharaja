@@ -33,7 +33,6 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** BUGs ***
 
-	*BUG Ahmadabad spelling
 	*BUG: Repro: have extra action and one pointer action for exchange. use extra action for another exchange and do it.  Then undo all the way out to turn start.
 					Result is tiles not unlocked for the original pointer excnage action.  WORKAROUND: use rewind time to just before start of turn.
 	???BUG: (saw more than once but repro not yet idenfied) duplicates in player.placed_palaces table.  Maybe came from reloading & testing?  Not sure.
@@ -42,6 +41,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 
 *** Stuff that is done ***
 
+	*BUG FIXED TESTING Ahmadabad spelling
 	****BUG FIXED TESTING able to select extra action during action selection phase.
 	**BUG FIXED TESTING play with DP: both player boards were geting updated for extra actions.  Data was sane, just a UI bug.  Somehow updating both player boards.
 	***BUG: FIXED TESTING need to add palace to player.placed_palaces in pending action & undo.
@@ -79,6 +79,7 @@ BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building
 	--TODO: DONE TESTING Hide help text when choosing actions and click done.  Show again if clicked modify button.  Visual cue to others who's still choosing.
 	--TODO: DONE TESTING set turn order marker dark (brown?) when turn has been taken.  Visual cue to others.
 	--TODO: DONE TESTING move the action list display to the player board XML UI.  Avoids the flip problem with the dial.
+	--TODO: DONE TESTING Random rotate dial during action selection.  Configurable in player prefs.
 
 ==========================================================================================]]
 
@@ -89,13 +90,13 @@ env.test.debug = false
 env.test.in_dev = false
 env.test.force_fresh_save = false
 env.test.save_positions = false
-env.test.auto_switch = true
 env.test.test_palace_sync = true --TESTING player placed palace sync with network palaces.  Looking for bug repro.
 
+-- env.test.auto_switch = true
 -- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
 -- env.test.players = {"Yellow","Red","Blue","Purple",}
 -- env.test.players = {"Yellow","Purple",}
-env.test.players = {"Green","Blue",}
+-- env.test.players = {"Green","Blue",}
 -- env.test.players = {"Green","Red","Blue"}
 
 env.game = {}
@@ -104,6 +105,7 @@ env.game.use_help = true
 env.game.auto_select_zero_route = true
 env.game.auto_select_unique_cheapest_route = false
 env.game.give_immediate_replacement_bonus = false
+env.game.random_dial_rotate = true
 
 GD = {}
 
@@ -440,6 +442,9 @@ function prefsOptionClick(player, value, id)
 	elseif action == "close" then
 		UI_setAttribute(player.color.."_prefs_panel","visibility", "Pink")
 		plr.prefs.show = false
+	elseif action == "randomDialRotate" then
+		UI_setAttribute(id, "isOn", setting)
+		plr.prefs.random_dial_rotate = setting
 	elseif action == "zeroCostRoute" then
 		UI_setAttribute(id, "isOn", setting)
 		plr.prefs.auto_select_zero_route = setting
@@ -930,6 +935,8 @@ function setupGlobalUI()
 		e.attributes.id = pcol.."_zeroCostRoute_opt"
 		e = getXmlElement("pref_uniqeLeastCostRoute_opt",prefs)
 		e.attributes.id = pcol.."_uniqeLeastCostRoute_opt"
+		e = getXmlElement("pref_randomDialRotate_opt",prefs)
+		e.attributes.id = pcol.."_randomDialRotate_opt"
 		table.insert(status.children, prefs)
 	end
 	--setup the city rows
@@ -1071,6 +1078,7 @@ function setupPlayers()
 			pointers = {},
 			prefs = {
 				show = false,
+				random_dial_rotate = env.game.random_dial_rotate,
 				auto_select_zero_route = env.game.auto_select_zero_route,
 				auto_select_unique_cheapest_route = env.game.auto_select_unique_cheapest_route,
 			},
@@ -1378,6 +1386,13 @@ function beginNextRound()
 		end
 		setCharacterBonus(pcol, false)   --TODO: is this needed here?
 		local dial = getObjectFromGUID(C.action_dials[pcol])
+		local rot = dial.getRotation()
+		if player.prefs.random_dial_rotate then
+			rot.y = math.random(0,360)
+		else
+			rot.y = 180
+		end
+		dial.setRotation(rot)
 		dial.call("reset")
 		dial.call("enableDialButtons")
 		dial.call("hideMe")
@@ -2103,6 +2118,9 @@ function startPlayerTurn(pcol)
 	local dial = getObjectFromGUID(C.action_dials[pcol])
 	Wait.condition(
 		function()
+			local rot = dial.getRotation()
+			rot.y = 180
+			dial.setRotation(rot)
 			dial.call("disableDialButtons")
 			dial.call("disableBackButton")
 			dial.call("showMe")

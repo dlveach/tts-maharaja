@@ -370,8 +370,8 @@
   </TableLayout>
   <Panel id="prefs_panel" active="false"
     visibility=""
-    height="220" width="400"
-    offsetXY="0 -220"
+    height="280" width="400"
+    offsetXY="0 -250"
     rectAlignment="MiddleLeft"
     color="#00091a" >
     <TableLayout id="prefs_table" columnWidths="80 0" color="rgba(0,0,0,0)">
@@ -380,6 +380,17 @@
           <Panel image="Sprites/Layout/Title" color="#003699">
             <Text color="rgb(0.8,0.8,0.8)" text="Player Preferences"/>
           </Panel>
+        </Cell>
+      </Row>
+      <Row preferredHeight="60">
+        <Cell padding="0 0 0 0">
+          <Toggle class="Options" id="pref_randomDialRotate_opt" onValueChanged="prefsOptionClick" isOn="true"/>
+        </Cell>
+        <Cell padding="0 0 0 0">
+          <Text color="rgb(0.8,0.8,0.8)" fontsize="12" alignment="MiddleLeft">
+            Randomly rotate dial during secret action selection.
+            Prevents other players from guessing choices.
+          </Text>
         </Cell>
       </Row>
       <Row preferredHeight="60">

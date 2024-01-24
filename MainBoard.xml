@@ -1,7 +1,11 @@
-<XmlLayout xmlns="XmlLayout"
+<!--XmlLayout xmlns="XmlLayout"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd">
+           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd"-->
 
+ <XmlLayout xmlns="http://www.w3schools.com"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
+    <!--Include path="Xml/Styles.xml" /-->
 
 <Defaults>
 

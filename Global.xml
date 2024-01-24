@@ -1,7 +1,12 @@
 <!-- Xml UI. See documentation: https://api.tabletopsimulator.com/ui/introUI/ -->
-<XmlLayout xmlns="XmlLayout"
+<!--XmlLayout xmlns="XmlLayout"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd">
+           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd"-->
+
+ <XmlLayout xmlns="http://www.w3schools.com"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
+    <!--Include path="Xml/Styles.xml" /-->
 
  <Defaults>   <!-- BoSL defaults -->
 
@@ -310,7 +315,7 @@
     </Panel>
     <Panel padding="100 100 0 60">
       <VerticalLayout allowDragging="false"
-        spacing="1" rectAlignment="Center" offsetXY="0 0">
+        spacing="1" rectAlignment="MiddleCenter" offsetXY="0 0">
         <Toggle class="Options" id="opt_use_auction" text="  Auction starting characters" />
         <Toggle class="Options" id="opt_verbose" text="  Verbose game messages" />
       </VerticalLayout>

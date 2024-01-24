@@ -1,0 +1,36 @@
+<Defaults>
+  <Panel class="Draggable" allowDragging="true" returnToOriginalPositionWhenReleased="false" />
+  <Panel class="RayCast" raycastTarget="true" />
+  <Panel class="NoRay" raycastTarget="false" />
+  <Panel class="Viewport" image="Sprites/Layout/Viewport" />
+  <Panel class="Base" image="Sprites/Layout/Base" />
+  <Panel class="Title" image="Sprites/Layout/Title" />
+  <Panel class="Light" color="#003699" />
+  <Panel class="Dark" color="#00091a" />
+  <Panel class="Clear" color="rgba(0,0,0,0)" />
+  <TableLayout autoCalculateHeight="true" useGlobalCellPadding="false" />
+  <TableLayout class="Dark" color="rgba(0,0,0,1)" />
+  <Row dontUseTableRowBackground="true" />
+  <Cell dontUseTableCellBackground="true" color="rgba(0,0,0,0)"/> <!-- dontUseTableCellBackground false to show lines -->
+  <Button textColor="rgb(1,1,0)" fontSize="14" font="Arial" textShadow="rgba(0,0,0,0.6)" />
+  <Button hoverClass="hover" pressClass="press" selectClass="select" color="blue" image="Sprites/Layout/Button" />
+  <Button class="hover" color="cyan" textShadow="rgba(0,0,0,1)" />
+  <Button class="press" color="blue" textColor="white" />
+  <Button class="select" color="blue" textColor="white" textShadow="rgba(0,0,0,1)" />
+  <Toggle colors="blue|cyan|cyan|#C8C8C8)" textColor="#C8C8C8" />
+  <Text font="Arial" color="White" />
+  <Text class="Gray" color="Gray" />
+  <Text class="Yellow" color="rgb(1,1,0)" />
+  <Text class="Cyan" color="Cyan" />
+  <Text class="B" fontStyle="Bold" />
+  <Text class="Tiny" fontSize="10" />
+  <Text class="VS" fontSize="12" />
+  <Text class="S" fontSize="14" />
+  <Text class="M" fontSize="16" />
+  <Text class="ML" fontSize="18" />
+  <Text class="L" fontSize="20" />
+  <Text class="XL" fontSize="22" />
+  <Text class="XXL" fontSize="24" />
+  <Image preserveAspect="true" />
+  <Image class="Tip" tooltipPosition="Above" tooltipBorderColor="#00091a" tooltipBackgroundColor="#003699" tooltipTextColor="rgb(1,1,0)"/>
+</Defaults>

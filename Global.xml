@@ -1,339 +1,165 @@
-<!-- Xml UI. See documentation: https://api.tabletopsimulator.com/ui/introUI/ -->
-<!--XmlLayout xmlns="XmlLayout"
-           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd"-->
+ <XmlLayout xmlns="http://www.w3schools.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
 
- <XmlLayout xmlns="http://www.w3schools.com"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
-    <!--Include path="Xml/Styles.xml" /-->
+<Include src="XmlDefaults.xml"/>
 
- <Defaults>   <!-- BoSL defaults -->
-
-  <Panel
-    allowDragging="false"
-    returnToOriginalPositionWhenReleased="false"
-    rectAlignment="MiddleCenter" />
-
-  <Button hoverClass="hover"
-    pressClass="press"
-    selectClass="select"
-    color="blue"
-    textColor="rgb(1,1,0)"
-    fontSize="14"
-    font="Arial"
-    image="Sprites/Layout/Button"
-    textShadow="rgba(0,0,0,0.6)" />
-  <Button class="hover"
-    color="cyan"
-    textShadow="rgba(0,0,0,1)"/>
-  <Button class="press"
-    color="blue"
-    textColor="white" />
-  <Button class="select"
-    color="blue"
-    textColor="white"
-    textShadow="rgba(0,0,0,1)" />
-
-  <Button class="routeHeaderButton"
-    image="Sprites/Layout/Button"
-    colors="Black|Grey|Black|Black"
-    onClick="routeSelectClick" />
-
-  <Toggle class="Options"
-    onValueChanged="startOptionsBtn"
-    colors="blue|cyan|cyan|grey)"
-    textColor="grey" />
-
-  <TableLayout
-    autoCalculateHeight="true"
-    useGlobalCellPadding="false"
-    padding="0 0 0 0"
-    color="rgba(0,0,0,0)"
-    rowBackgroundColor="rgba(0,0,0,0)" />
-
-  <Row
-    preferredHeight="30"
-    dontUseTableRowBackground="true"
-    color="rgba(0,0,0,0)"  />
-
-  <!-- Cell dontUseTableCellBackground false during dev to show lines -->
-  <Cell
-    dontUseTableCellBackground="true"
-    color="rgba(0,0,0,0)"
-    padding="0 0 0 0" />
-
-  <Text class="small"
-    fontSize="12"
-    color="white"/>
-  <Text class="medium"
-    fontSize="14"
-    color="white"/>
-  <Text class="med_large"
-    fontSize="18"
-    color="white"/>
-  <Text class="large"
-    fontSize="20"
-    color="white" />
-
+ <Defaults>   <!-- Global defaults and overrides -->
+  <Button class="RouteHdr" image="Sprites/Layout/Button" colors="Black|Grey|Black|Black" textColor="#C8C8C8" onClick="routeSelectClick" />
+  <Toggle class="Options" onValueChanged="startOptionsBtn"/>
+  <Text class="28" fontSize="28"/>
+  <VerticalScrollView color="#00091a" scrollbarColors="#174DAD|#174DAD|#174DAD|#174DAD" scrollbarImage="Sprites/Layout/Base" scrollbarBackgroundColor="#2C63A3" />
 </Defaults>
 
-<Panel id="restore_dialog_pnl"  active="false"
-  height="120" width="420"
-  padding="10 10 10 10"
-  color="#003699"
-  image="Sprites/Layout/Base">
-  <Panel
-    color="#00091a"
-    image="Sprites/Layout/Base"
-    childAlignment="MiddleCenter">
+<!-- Start panel -->
+<Panel id="startPanel"  active="false" class="Draggable Light Base" height="320" width="400" padding="10">
+  <Panel class="Dark Viewport">
     <TableLayout>
-      <Row preferredHeight="100">
-        <Cell padding="0 0 0 0">
-          <Text class="large" color="Gray">
-            Restoring game from save ...
-           </Text>
+      <Row preferredHeight="80">
+        <Cell padding="0 0 10 10"><Text id="start_title" class="L Gray" text="After all players are seated:"/></Cell>
+      </Row>
+      <Row preferredHeight="80">
+        <Cell padding="100 100 10 20"><Button id="startButton" onClick="startGameBtn" fontSize="20" text="Start Game"/></Cell>
+      </Row>
+      <Row preferredHeight="40">
+        <Cell><Text class="M Gray" text="Game options:"/></Cell>
+      </Row>
+      <Row preferredHeight="80">
+        <Cell padding="90 10 0 20">
+          <VerticalLayout spacing="1">
+            <Toggle class="Options" id="opt_use_auction" text="  Auction starting characters" />
+            <Toggle class="Options" id="opt_verbose" text="  Verbose game messages" />
+          </VerticalLayout>
         </Cell>
+      </Row>
+      <Row preferredHeight="20">
+        <Cell><Text id="game_version" class="Tiny Gray" alignment="UpperCenter" text="Version X.X.X dev branch"/></Cell>
       </Row>
     </TableLayout>
   </Panel>
 </Panel>
-
-<Panel id="end_game_pnl"  active="false"
-  allowDragging="true"
-  returnToOriginalPositionWhenReleased="false"
-  height="400" width="600"
-  padding="15 15 15 15"
-  color="#003699"
-  image="Sprites/Layout/Base">
-  <Panel
-    color="#00091a"
-    image="Sprites/Layout/Base"
-    childAlignment="MiddleCenter">
+<!-- Restore panel -->
+<Panel id="restore_dialog_pnl" class="Light Base" active="false" height="120" width="420" padding="10">
+  <Panel class="Dark Viewport">
+    <TableLayout>
+      <Row preferredHeight="100">
+        <Cell><Text class="L Gray" text="Restoring game from save ..."/></Cell>
+      </Row>
+    </TableLayout>
+  </Panel>
+</Panel>
+<!-- End Game panel -->
+<Panel id="end_game_pnl" class="Draggable Light Base" active="false" height="400" width="600" padding="10">
+  <Panel class="Dark Base">
     <TableLayout>
       <Row preferredHeight="80">
         <Cell>
-          <TableLayout  columnWidths="220 0">
+          <TableLayout columnWidths="220 0">
             <Row preferredHeight="80">
               <Cell padding="0 10 0 0">
-                <Text id="end_game_winner_txt" fontSize="28" color="Gray" alignment="MiddleRight" text="Gray" />
+                <Text id="end_game_winner_txt" class="28 Gray" alignment="MiddleRight" text="Gray"/>
               </Cell>
-              <Cell padding="10 0 0 0"><Text fontSize="28" color="rgb(0.8,0.8,0.8)" alignment="MiddleLeft" text="wins the game!" /></Cell>
+              <Cell padding="10 0 0 0"><Text class="28 LGray Left" text="wins the game!"/></Cell>
             </Row>
           </TableLayout>
         </Cell>
       </Row>
-      <Row preferredHeight="20" />
+      <Row preferredHeight="20"/>
       <Row preferredHeight="240">
         <Cell>
           <TableLayout columnWidths="150 0 0 0">
             <Row preferredHeight="40">
-              <Cell padding="0 0 0 0">
-                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text=""/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text="Palaces"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text="Gold"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text class="med_large" color="rgb(0.8,0.8,0.8)" text="Character"/>
-              </Cell>
+              <Cell><Text class="ML LGray" text=""/></Cell>
+              <Cell><Text class="ML LGray" text="Palaces"/></Cell>
+              <Cell><Text class="ML LGray" text="Gold"/></Cell>
+              <Cell><Text class="ML LGray" text="Character"/></Cell>
             </Row>
             <Row id="end_row_1" preferredHeight="40">
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_1_player" fontSize="24" color="Gray" text="Gray"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_1_palaces" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_1_gold" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_1_charid" class="large" text="0"/>
-              </Cell>
+              <Cell><Text id="end_row_1_player" class="XXL Gray" text="Gray"/></Cell>
+              <Cell><Text id="end_row_1_palaces" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_1_gold" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_1_charid" class="L" text="0"/></Cell>
             </Row>
             <Row id="end_row_2" preferredHeight="40">
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_2_player" fontSize="24" color="Gray" text="Gray"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_2_palaces" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_2_gold" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_2_charid" class="large" text="0"/>
-              </Cell>
+              <Cell><Text id="end_row_2_player" class="XXL Gray" text="Gray"/></Cell>
+              <Cell><Text id="end_row_2_palaces" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_2_gold" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_2_charid" class="L" text="0"/></Cell>
             </Row>
             <Row id="end_row_3" preferredHeight="40">
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_3_player" fontSize="24" color="Gray" text="Gray"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_3_palaces" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_3_gold" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_3_charid" class="large" text="0"/>
-              </Cell>
+              <Cell><Text id="end_row_3_player" class="XXL Gray" text="Gray"/></Cell>
+              <Cell><Text id="end_row_3_palaces" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_3_gold" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_3_charid" class="L" text="0"/></Cell>
             </Row>
             <Row id="end_row_4" preferredHeight="40">
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_4_player" fontSize="24" color="Gray" text="Gray"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_4_palaces" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_4_gold" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_4_charid" class="large" text="0"/>
-              </Cell>
+              <Cell><Text id="end_row_4_player" class="XXL Gray" text="Gray"/></Cell>
+              <Cell><Text id="end_row_4_palaces" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_4_gold" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_4_charid" class="L" text="0"/></Cell>
             </Row>
             <Row id="end_row_5" preferredHeight="40">
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_5_player" fontSize="24" color="Gray" text="Gray"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_5_palaces" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_5_gold" class="large" text="0"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text id="end_row_5_charid" class="large" text="0"/>
-              </Cell>
+              <Cell><Text id="end_row_5_player" class="XXL Gray" text="Gray"/></Cell>
+              <Cell><Text id="end_row_5_palaces" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_5_gold" class="L" text="0"/></Cell>
+              <Cell><Text id="end_row_5_charid" class="L" text="0"/></Cell>
             </Row>
-
           </TableLayout>
         </Cell>
       </Row>
     </TableLayout>
   </Panel>
 </Panel>
-
-<Panel id="replace_character_pnl"   active="false"
-  allowDragging="true"
-  returnToOriginalPositionWhenReleased="false"
-  height="220" width="420"
-  padding="10 10 10 10"
-  color="#003699"
-  image="Sprites/Layout/Base">
-  <Panel
-    color="#00091a"
-    image="Sprites/Layout/Base"
-    childAlignment="MiddleCenter">
+<!-- Replace Character panel -->
+<Panel id="replace_character_pnl" class="Draggable Light Base" active="false" height="220" width="420" padding="10">
+  <Panel class="Dark Viewport">
     <TableLayout columnWidths="0 0">
       <Row preferredHeight="100">
-        <Cell padding="0 0 0 0" columnSpan="2">
+        <Cell columnSpan="2">
           <VerticalLayout>
-            <Text id="replace_character_txt" fontSize="24" color="Green" text="Green"/>
-            <Text class="large" color="Gray">Choose a replacement character</Text>
+            <Text id="replace_character_txt" class="XXL" color="Green" text="Green"/>
+            <Text class="L Gray" text="Choose a replacement character"/>
           </VerticalLayout>
         </Cell>
       </Row>
       <Row preferredHeight="80">
         <Cell padding="25 25 20 5">
           <Panel id="replace_done_pnl" visibility="Pink">
-            <Button id="replace_char_done" onClick="replaceCharDialogBtn">
-              <Text fontSize="20" color="rgb(1,1,0)" textShadow="rgba(0,0,0,1)" text="Done"/>
-            </Button>
+            <Button id="replace_char_done" onClick="replaceCharDialogBtn" fontSize="18" text="Done"/>
           </Panel>
         </Cell>
         <Cell padding="25 25 20 5">
           <Panel id="replace_undo_pnl" visibility="Pink">
-            <Button id="replace_char_undo" onClick="replaceCharDialogBtn">
-              <Text fontSize="20" color="rgb(1,1,0)" textShadow="rgba(0,0,0,1)" text="Undo"/>
-            </Button>
+            <Button id="replace_char_undo" onClick="replaceCharDialogBtn" fontSize="18" text="Undo"/>
           </Panel>
         </Cell>
       </Row>
     </TableLayout>
   </Panel>
 </Panel>
-
-<Panel id="penalty_dialog_pnl"  active="false"
-  height="220" width="420"
-  padding="10 10 10 10"
-  color="#003699"
-  image="Sprites/Layout/Base">
-  <Panel
-    color="#00091a"
-    image="Sprites/Layout/Base"
-    childAlignment="MiddleCenter">
+<!-- Action Penalty panel -->
+<Panel id="penalty_dialog_pnl" class="Draggable Light Base" active="false" height="220" width="420" padding="10">
+  <Panel class="Dark Viewport">
     <TableLayout>
-      <Row preferredHeight="100">
-        <Cell padding="0 0 0 0">
-          <Text class="large" color="Gray">
-            *** Warning ***
-            You still have required actions
-            Penalty: Other players +2 gold.
-           </Text>
-        </Cell>
-      </Row>
+      <Row preferredHeight="100"><Cell><Text class="L Gray">
+        Are you sure?
+        You still have required actions
+        Penalty: Other players +2 gold.
+      </Text></Cell></Row>
       <Row preferredHeight="80">
-        <Cell padding="25 25 20 5">
-          <HorizontalLayout
-            spacing="40">
-            <Button id="end_turn_ok" onClick="penaltyDialogBtn" fontSize="20" text="OK"/>
-            <Button id="end_turn_cancel" onClick="penaltyDialogBtn" fontSize="20" text="Cancel"/>
+        <Cell padding="30 30 25 10">
+          <HorizontalLayout spacing="50">
+            <Button id="end_turn_ok" onClick="penaltyDialogBtn" fontSize="18" text="OK"/>
+            <Button id="end_turn_cancel" onClick="penaltyDialogBtn" fontSize="18" text="Cancel"/>
           </HorizontalLayout>
         </Cell>
       </Row>
     </TableLayout>
   </Panel>
 </Panel>
-
-<Panel id="startPanel"  active="false"
-  allowDragging="true"
-  returnToOriginalPositionWhenReleased="false"
-  height="400" width="500"
-  padding="20 20 20 20"
-  color="#003699"
-  image="Sprites/Layout/Base">
-  <VerticalLayout
-    color="#00091a"
-    image="Sprites/Layout/Base"
-    childAlignment="MiddleCenter"
-    spacing="0">
-    <Panel padding="0 0 10 10">
-      <Text class="large" color="grey" text="After all players are seated:"/>
-    </Panel>
-    <Panel padding="150 150 0 0">
-      <Button id="startButton" onClick="startGameBtn"
-        fontSize="20" text="Start"/>
-    </Panel>
-    <Panel padding="0 0 40 0">
-      <Text class="medium" color="grey" text="Game options:"/>
-    </Panel>
-    <Panel padding="100 100 0 60">
-      <VerticalLayout allowDragging="false"
-        spacing="1" rectAlignment="MiddleCenter" offsetXY="0 0">
-        <Toggle class="Options" id="opt_use_auction" text="  Auction starting characters" />
-        <Toggle class="Options" id="opt_verbose" text="  Verbose game messages" />
-      </VerticalLayout>
-    </Panel>
-  </VerticalLayout>
-</Panel>
-
-<Panel id="statusPanel" active="false"
-  allowDragging="true"
-  returnToOriginalPositionWhenReleased="false"
-  width="320" height="370"
-  offsetXY="-750 350"
-  color="rgba(0,0,0,0)" >
-  <TableLayout id="Status_table"
-    raycastTarget="true">
-    <Row
-      preferredHeight="40"
-      color="rgba(0,0,0,0)" >
+<!-- HUD Status panel -->
+<Panel id="statusPanel" class="Draggable NoRay" active="false" width="320" height="370" rectAlignment="UpperLeft">
+  <TableLayout raycastTarget="true">
+    <Row preferredHeight="40">
       <Cell>
         <Panel id="status_title" image="Sprites/Layout/Title" color="#003699" onClick="statusClick">
           <TableLayout columnWidths="40 0 40">
@@ -343,9 +169,7 @@
                   <Image image="Sprites/Icons/Cog" color="rgb(0.8,0.8,0.8)" />
                 </Button>
               </Cell>
-              <Cell padding="0 0 0 0">
-                <Text class="medium" color="rgb(0.8,0.8,0.8)" text="City Scoring Status"/>
-              </Cell>
+              <Cell><Text class="S LGray" text="City Scoring Status"/></Cell>
               <Cell/>
             </Row>
           </TableLayout>
@@ -356,42 +180,35 @@
       <Cell>
         <Panel color="#00091a" >
           <TableLayout id="status_table" columnWidths="100 40 36" color="rgba(0,0,0,0)">
-            <Row id="status_header_row">
+            <Row preferredHeight="30" id="status_header_row">
               <Cell/>
               <Cell/>
-              <Cell id="status_h_template"><Text class="medium" color="Gray" text="?"/></Cell>
+              <Cell id="status_h_template"><Text class="S" color="Gray" text="?"/></Cell>
             </Row>
-            <Row id="status_row_template">
-              <Cell><Image image="Sprites/Layout/Button" color="#003699">
-                <Text id="status_city_name_template" class="medium" color="rgb(0.8,0.8,0.8)" text=""/>
-              </Image></Cell>
+            <Row preferredHeight="30" id="status_row_template">
+              <Cell><Text id="status_city_name_template" class="S LGray" text=""/></Cell>
               <Cell padding=" 10 3 3"><Image id="status_city_image_template" image="" preserveAspect="true"/></Cell>
-              <Cell id="status_p_template"><Text id="status_p_text_template" class="medium" text="?"/></Cell>
+              <Cell id="status_p_template"><Text id="status_p_text_template" class="S" text="?"/></Cell>
             </Row>
           </TableLayout>
         </Panel>
       </Cell>
     </Row>
   </TableLayout>
-  <Panel id="prefs_panel" active="false"
-    visibility=""
-    height="280" width="400"
-    offsetXY="0 -250"
-    rectAlignment="MiddleLeft"
-    color="#00091a" >
+  <Panel id="prefs_panel" class="Dark" active="false" visibility="" height="280" width="400" offsetXY="0 -250" rectAlignment="MiddleLeft">
     <TableLayout id="prefs_table" columnWidths="80 0" color="rgba(0,0,0,0)">
-      <Row>
-        <Cell padding="0 0 0 0" columnSpan="2">
+      <Row preferredHeight="30" >
+        <Cell columnSpan="2">
           <Panel image="Sprites/Layout/Title" color="#003699">
             <Text color="rgb(0.8,0.8,0.8)" text="Player Preferences"/>
           </Panel>
         </Cell>
       </Row>
       <Row preferredHeight="60">
-        <Cell padding="0 0 0 0">
+        <Cell>
           <Toggle class="Options" id="pref_randomDialRotate_opt" onValueChanged="prefsOptionClick" isOn="true"/>
         </Cell>
-        <Cell padding="0 0 0 0">
+        <Cell>
           <Text color="rgb(0.8,0.8,0.8)" fontsize="12" alignment="MiddleLeft">
             Randomly rotate dial during secret action selection.
             Prevents other players from guessing choices.
@@ -399,10 +216,10 @@
         </Cell>
       </Row>
       <Row preferredHeight="60">
-        <Cell padding="0 0 0 0">
+        <Cell>
           <Toggle class="Options" id="pref_zeroCostRoute_opt" onValueChanged="prefsOptionClick" isOn="true"/>
         </Cell>
-        <Cell padding="0 0 0 0">
+        <Cell>
           <Text color="rgb(0.8,0.8,0.8)" fontsize="12" alignment="MiddleLeft">
             Auto select a zero cost Architect route.
             Route selection dialog will not be shown if one exists.
@@ -410,10 +227,10 @@
         </Cell>
       </Row>
       <Row preferredHeight="60">
-        <Cell padding="0 0 0 0">
+        <Cell>
           <Toggle class="Options" id="pref_uniqeLeastCostRoute_opt" onValueChanged="prefsOptionClick" isOn="false"/>
         </Cell>
-        <Cell padding="0 0 0 0">
+        <Cell>
           <Text color="rgb(0.8,0.8,0.8)" fontSize="12" alignment="MiddleLeft">
             Auto select the least cost Architect route if unique.
             Route selection dialog will still show if more than one
@@ -431,31 +248,17 @@
     </TableLayout>
   </Panel>
 </Panel>
-
-<Panel id="routes_dialog_pnl" active="false"
-  allowDragging="true"
-  returnToOriginalPositionWhenReleased="false"
-  width="226" height="400"
-  offsetXY="500 100"
-  color="rgba(0,0,0,0)" >
-  <TableLayout id="route_picker_tbl"
-    raycastTarget="true">
+<!-- Routes panel -->
+<Panel id="routes_dialog_pnl" class="Draggable" active="false" width="226" height="400" offsetXY="500 100">
+  <TableLayout id="route_picker_tbl" raycastTarget="true">
     <Row preferredHeight="40" color="rgba(0,0,0,0)" >
       <Cell>
-        <Panel image="Sprites/Layout/Title" color="#003699" >
+        <Panel class="Light Title">
           <TableLayout columnWidths="80 0 70">
             <Row preferredHeight="45">
-              <Cell padding="0 0 0 0">
-                <Text id="routes_dialog_title_player" class="large" color="Gray" text="Gray"/>
-              </Cell>
-              <Cell padding="0 0 0 0">
-                <Text class="medium" color="rgb(0.8,0.8,0.8)" text="Choose a Route"/>
-              </Cell>
-              <Cell padding="5 5 5 10">
-                <Button id="routes_dialog_cancel" onClick="routeSelectClick">
-                  <Text class="medium" text="Cancel"/>
-                </Button>
-              </Cell>
+              <Cell><Text id="routes_dialog_title_player" class="L" color="Gray" text="Gray"/></Cell>
+              <Cell><Text class="S LGray" text="Choose a Route"/></Cell>
+              <Cell padding="5 5 5 10"><Button id="routes_dialog_cancel" onClick="routeSelectClick" text="Cancel"/></Cell>
             </Row>
           </TableLayout>
         </Panel>
@@ -463,46 +266,31 @@
     </Row>
     <Row preferredHeight="360">
       <Cell>
-        <Panel color="#00091a">
-          <TableLayout id="routes_main_tbl" columnWidths="120 40 36 36 36 36" color="rgba(0,0,0,0)">
+        <Panel class="Dark Viewport">
+          <TableLayout id="routes_main_tbl" columnWidths="120 40 36 36 36 36">
             <Row id="routes_header_row" preferredHeight="30">
               <Cell/>
-
-              <Cell><Text class="medium" color="rgb(0.8,0.8,0.8)" text="T" /></Cell>
-
+              <Cell><Text class="S LGray" text="T"/></Cell>
               <Cell id="routes_h_template">
-                <Button id="route_h_p_btn_template" class="routeHeaderButton">
-                  <Text class="medium" color="Grey" text="C"/>
-                </Button>
+                <Button id="route_h_p_btn_template" class="RouteHdr">
+                 <Text class="medium" color="Grey" text="C"/>
+               </Button>
               </Cell>
-
               <Cell/>
-
             </Row>
             <Row id="route_details_row" preferredHeight="330">
               <Cell id="route_details_cell" columnSpan="8">
-                <VerticalScrollView id="routes_scroll_view" color="#00091a"
-                  scrollbarColors="#174DAD|#174DAD|#174DAD|#174DAD" scrollbarImage="Sprites/Layout/Base"
-                  scrollbarBackgroundColor="#2C63A3">
-
-                  <TableLayout id="route_tbl" columnWidths="120 40 36 36 36" color="rgba(0,0,0,0)"
-                    autoCalculateHeight="true">
-
-                    <Row id="route_n_row_template">
+                <VerticalScrollView id="routes_scroll_view">
+                  <TableLayout id="route_tbl" columnWidths="120 40 36 36 36">
+                    <Row preferredHeight="30" id="route_n_row_template">
                       <Cell>
-                        <Button id="route_n_btn_template" image="Sprites/Layout/Button" onClick="routeSelectClick">
-                          <Text id="route_n_btn_txt_template" class="medium" color="rgb(1,1,0)" text="1 2 3 4 5 6 7 8"/>
+                        <Button id="route_n_btn_template" onClick="routeSelectClick">
+                          <Text id="route_n_btn_txt_template" class="S" text="1 2 3 4 5 6 7 8"/>
                         </Button>
                       </Cell>
-                      <Cell >
-                        <Text id="route_n_total_cost_template" class="medium" color="rgb(0.8,0.8,0.8)" text="0"/>
-                      </Cell>
-                      <Cell id="route_n_pcol_cost_template">
-                        <Text id="route_n_pcol_cost_txt_template" class="medium" text="0"/>
-                      </Cell>
-
+                      <Cell><Text id="route_n_total_cost_template" class="S LGray" text="0"/></Cell>
+                      <Cell id="route_n_pcol_cost_template"><Text id="route_n_pcol_cost_txt_template" class="S" text="0"/></Cell>
                     </Row>
-
                   </TableLayout>
                 </VerticalScrollView>
               </Cell>
@@ -513,7 +301,6 @@
     </Row>
   </TableLayout>
 </Panel>
-
 
 </XmlLayout>
 

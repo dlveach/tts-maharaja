@@ -1,120 +1,52 @@
-<!--XmlLayout xmlns="XmlLayout"
-   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-   xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd"-->
+ <XmlLayout xmlns="http://www.w3schools.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
 
- <XmlLayout xmlns="http://www.w3schools.com"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
-    <!--Include path="Xml/Styles.xml" /-->
+<Include src="XmlDefaults.xml"/>
 
 <Defaults>
-
-  <Panel class="buttonPanel"
-    active="true"
-    color="0,0,0,0"
-    height="50" width="50"
-    rotation="0 0 0"
-    scale="1 1" />
-
-  <Button class="dialButton"
-    hoverClass="hover"
-    pressClass="press"
-    selectClass="select"
-    onClick="dialClick"
-    image="teal_dot"
-    color="rgba(0,0,0,0)" />
-
-  <Button class="modifyButton"
-    hoverClass="hover"
-    pressClass="press"
-    selectClass="select"
-    onClick="Global/dialModifyClick"
-    image="Sprites/Layout/Button"
-    color="Blue" />
-
-  <Button class="freeActionButton"
-    hoverClass="hover"
-    pressClass="press"
-    selectClass="select"
-    onClick="Global/freeActionBtnClick"
-    image="Sprites/Layout/Button"
-    color="Blue" />
-
-  <Button class="hover"
-    color="Cyan" />
-  <Button class="press"
-    color="White" />
-  <Button class="select"
-    color="White" />
-
-  <TableLayout
-    useGlobalCellPadding="false"
-    rowBackgroundColor="rgba(0,0,0,0)" />
-
-  <Row
-    dontUseTableRowBackground="true"
-    color="rgba(0,0,0,0)"  />
-
-  <Cell
-    dontUseTableCellBackground="true" />  <!-- set to false to show grid lines -->
-
-  <Text
-    color="rgb(1,1,0)"
-    textShadow="rgba(0,0,0,0.6)" />
-
-  <Text class="actionText"
-    alignment="MiddleLeft"
-    fontSize="16" />
-
+  <Panel class="buttonPanel" active="true" height="50" width="50"/>
+  <Button hoverClass="hover" pressClass="press" selectClass="select" color="rgba(0,0,0,0)" image="teal_dot" />
 </Defaults>
 
-<Panel id="back_button_panel" active="false"
-  color="rgba(0,0,0,0)"
-  height="100" width="100"
-  rotation="180 0 0"
-  position="0 0 10"
-  scale="1 1"
-  padding="0 0 20 20"
-  >
-  <Button class="dialButton" onClick="Global/dialModifyClick" id="modify" >
-    <!--Text fontSize="20" color="rgb(1,1,0)" text="Modify" /-->
-  </Button>
+<Panel id="back_button_panel" active="false" height="100" width="100" rotation="180 0 0" position="0 0 20">
+  <!-- <Button id="modify" onClick="Global/dialModifyClick" image="Sprites/Layout/Button" color="Blue" fontSize="20" text="Modify"/> -->
+  <Button id="modify" onClick="Global/dialModifyClick" image="teal_dot" color="Blue"/>
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_1" position="0 140 -10" >
-  <Button class="dialButton" id="dialBtn_1" />
+  <Button onClick="dialClick" id="dialBtn_1" />
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_2" position="90 100 -10" >
-  <Button class="dialButton" id="dialBtn_2" />
+  <Button onClick="dialClick" id="dialBtn_2" />
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_3" position="140 20 -10" >
-  <Button class="dialButton" id="dialBtn_3"/>
+  <Button onClick="dialClick" id="dialBtn_3"/>
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_4" position="130 -80 -10" >
-  <Button class="dialButton" id="dialBtn_4"/>
+  <Button onClick="dialClick" id="dialBtn_4"/>
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_5" position="60 -140 -10" >
-  <Button class="dialButton" id="dialBtn_5"/>
+  <Button onClick="dialClick" id="dialBtn_5"/>
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_6" position="-40 -140 -10" >
-  <Button class="dialButton" id="dialBtn_6"/>
+  <Button onClick="dialClick" id="dialBtn_6"/>
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_7" position="-120 -80 -10" >
-  <Button class="dialButton" id="dialBtn_7"/>
+  <Button onClick="dialClick" id="dialBtn_7"/>
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_8" position="-140 20 -10" >
-  <Button class="dialButton" id="dialBtn_8"/>
+  <Button onClick="dialClick" id="dialBtn_8"/>
 </Panel>
 
 <Panel class="buttonPanel" id="dialBtnPnl_9" position="-90 100 -10" >
-  <Button class="dialButton" id="dialBtn_9"/>
+  <Button onClick="dialClick" id="dialBtn_9"/>
 </Panel>
 
 </XmlLayout>

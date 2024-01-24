@@ -1,81 +1,17 @@
-<!--XmlLayout xmlns="XmlLayout"
-           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xsi:schemaLocation="XmlLayout Configuration/XmlLayout.xsd"-->
+ <XmlLayout xmlns="http://www.w3schools.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
 
- <XmlLayout xmlns="http://www.w3schools.com"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="../../../Configuration/XmlLayout.xsd">
-    <!--Include path="Xml/Styles.xml" /-->
+<Include src="XmlDefaults.xml"/>
 
 <Defaults>
-
-  <Button
-        hoverClass="hover"
-        pressClass="press"
-        selectClass="select"
-        onClick="Global/playerBoardClick"
-        image="Sprites/Layout/Button"
-        color="Blue" />
-  <Button class="hover"
-        color="Cyan" />
-  <Button class="press"
-        color="White" />
-  <Button class="select"
-        color="White" />
-
-  <TableLayout
-        useGlobalCellPadding="false"
-        rowBackgroundColor="rgba(0,0,0,0)" />
-
-  <Row
-        dontUseTableRowBackground="true"
-        color="rgba(0,0,0,0)"  />
-
-  <Cell
-        dontUseTableCellBackground="true" />  <!-- false to show grid lines -->
-
   <Panel raycastTarget="false" />
-
-  <Text
-        fontSize="40"
-        color="rgb(1,1,0)"
-        textShadow="rgba(0,0,0,0.6)" />
-
-  <Panel class="governorPanel"
-        active="true"
-        color="#270A01"
-        position="-132.5 0 -15"
-        height="1920" width="140"
-        rotation="0 0 180"
-        scale="0.1 0.1" />  <!-- set color to rgba(0,0,0,0.4) for development  color="#0E2F0D"-->
-
-  <Row class="govRow"
-        preferredHeight="112"/>
-
-  <Cell class="govCell"
-        padding="20 20 10 10" />
-
-  <!-- Use UI.setClass(gImg_) to enable buttons on Governor images during the Gov Track action -->
-  <!-- Use UI.setClass(gImg) to disable buttons on Governor images -->
-  <Image class="gImg" />
-  <Image class="gImg_"
-        onClick="Global/governorClick" />
-
-  <Image class="cImg"
-        preserveAspect="true"/>
-  <Image class="cImg_"
-        onMouseEnter="Global/mouseOverCity"
-        onMouseExit="Global/mouseExitCity"
-        onClick="Global/mouseClickCity"
-        preserveAspect="true"/>
-
-  <Panel class="cityPanel"
-    color="Black"
-    active="true"
-    height="100" width="100"
-    rotation = "0 0 180"
-    scale="0.1 0.1" />
-
+  <Panel class="governorPanel" active="true" color="#270A01" position="-132.5 0 -15" height="1920" width="140" rotation="0 0 180" scale="0.1 0.1" />
+  <Row class="govRow" preferredHeight="112"/>
+  <Cell class="govCell" padding="20 20 10 10" />
+  <Image class="gImg" /> <!-- default class, set in code -->
+  <Image class="gImg_" onClick="Global/governorClick" /> <!-- clickable class, set in code -->
+  <!-- <Image class="cImg" preserveAspect="true"/>
+  <Image class="cImg_" onMouseEnter="Global/mouseOverCity" onMouseExit="Global/mouseExitCity" onClick="Global/mouseClickCity" preserveAspect="true"/> -->
 </Defaults>
 
 <Panel id="governor_panel" class="governorPanel" active="false">

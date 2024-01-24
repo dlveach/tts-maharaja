@@ -71,6 +71,7 @@ function onLoad(saved_data)
     self.UI.setAttribute("helpTextPanel","active", true)
     self.UI.setAttribute("player_actions_panel","active", true)
     self.UI.setAttribute("extra_action_panel","active", true)
+    self.UI.setAttribute("info_pnl","active",true)
   end
 end
 

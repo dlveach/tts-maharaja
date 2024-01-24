@@ -20,6 +20,7 @@
   <Toggle colors="blue|cyan|cyan|#C8C8C8)" textColor="#C8C8C8" />
   <Text font="Arial" color="White" />
   <Text class="Gray" color="Gray" />
+  <Text class="LGray" color="rgb(0.8,0.8,0.8)" />
   <Text class="Yellow" color="rgb(1,1,0)" />
   <Text class="Cyan" color="Cyan" />
   <Text class="B" fontStyle="Bold" />
@@ -31,6 +32,8 @@
   <Text class="L" fontSize="20" />
   <Text class="XL" fontSize="22" />
   <Text class="XXL" fontSize="24" />
+  <Text class="Right" alignment="MiddleRight" />
+  <Text class="Left" alignment="MiddleLeft" />
   <Image preserveAspect="true" />
   <Image class="Tip" tooltipPosition="Above" tooltipBorderColor="#00091a" tooltipBackgroundColor="#003699" tooltipTextColor="rgb(1,1,0)"/>
 </Defaults>

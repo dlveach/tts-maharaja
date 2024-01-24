@@ -10,94 +10,48 @@ Credits
 	Artist Franz Vohwinkel
 	Year released: 2004
 	Publisher: 	Phalanx Games B.V.
-							Phalanx Games Deutschland
-							Asmodee
-							KDS Distribuzione (Italy)
-							Mayfair Games
+		Phalanx Games Deutschland
+		Asmodee
+		KDS Distribuzione (Italy)
+		Mayfair Games
 
 BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building-india
 
-*** MVP FEATURES ***
+ 	-DONE: 1.0.0 XML standardization and cleanup, defaults
+	-TODO: 1.0.0 better dial back button image, randomize it's rotation as well
 
-	--TODO: implement route sorting on opponent selection (button in header of dialog)
+	-TODO; implement starting auction
+	-TODO: implement route sorting on opponent selection (button in header of dialog)
+	-TODO: (maybe) lock things (pool, placed houses etc.) after action if no more actions of that type.
+	-TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Minor but weird load artifacts with tokens.
 
-*** OTHER STUFF ***
-
-	--TODO: (maybe) lock things (pool, placed houses etc.) after action if no more actions of that type.
-	--TODO: (maybe?) convert playerboards to tile with jpeg vs token with png.  Minor but weird load artifacts with tokens.
-
-	--Code cleanup, refactoring
-	--TODO: Get rid of turn_action.index. Rather use turn_action table entry reference in pending_action? Cleaner but is this ok for JSON save encode?
-	--TODO: Get rid of getPlacedObjectSnap().  Just reference player (obj color) placed object (object type) table directly by obj guid.
+Code cleanup, refactoring
+	-TODO: Get rid of turn_action.index. Rather use turn_action table entry reference in pending_action? Cleaner but is this ok for JSON save encode?
+	-TODO: Get rid of getPlacedObjectSnap().  Just reference player (obj color) placed object (object type) table directly by obj guid.
 					Objects know their color and type.  Use that.  Architect snap also easily referenced in player data for it's color.
-
-*** BUGs ***
 
 	*BUG: Repro: have extra action and one pointer action for exchange. use extra action for another exchange and do it.  Then undo all the way out to turn start.
 					Result is tiles not unlocked for the original pointer excnage action.  WORKAROUND: use rewind time to just before start of turn.
 	???BUG: (saw more than once but repro not yet idenfied) duplicates in player.placed_palaces table.  Maybe came from reloading & testing?  Not sure.
 	???BUG: phantom palace in city node.  Can't repro yet.  Added sync test on player turn end to check consistency.
 
-
-*** Stuff that is done ***
-
-	*BUG FIXED TESTING Ahmadabad spelling
-	****BUG FIXED TESTING able to select extra action during action selection phase.
-	**BUG FIXED TESTING play with DP: both player boards were geting updated for extra actions.  Data was sane, just a UI bug.  Somehow updating both player boards.
-	***BUG: FIXED TESTING need to add palace to player.placed_palaces in pending action & undo.
-	***BUG: FIXED TESTING placed palaces getting unlocked in unplayedPalacesLock().  Cause: not checking player.placed_palaces in fn.
-	****BUG: FIXED TESTING setting gov buttons in updateLockStates is bad.  Remove it and set explicity.
-	**BUG: FIXED TESTING Replacement char id isn't updated in player until they hit done so updateCityScores() doesn't change (for Sadhus) until they hit done.
-	***BUG: FIXED TESTING attempt to build palace into full city, isn't detected in drop palace.  Just fails.
-	**BUG: TESTING only make last placed unlocked for move.  Unlocking another for more available move actions. etc.  Lot of work.
-	**BUG: FIXED TESTING Sadhu bonus not reflected in City Scoring Status until player hits done.  Is counted in city scoring after done.
-	****BUG: FIXED TESTING when moving a house from a village (and maybe city?) need to remove table entry, don't set it to nil.  Breaks ipairs.
-	****BUG: FIXED TESTING NASTY gaps in track are not handled correctly when moving governor involves the gap.
-	***BUG: FIXED TESTING only enable button on track rows with a governor in it.  Empty rows (gaps) shold not have buttons.
-	***BUG: FIXED TESTING Double track action does not work, need to keep buttons enabled if more track actions in turn_actions
-	**BUG: FIXED TESTING help text still shows action selection when player turns stage starts
-	*****BUG: FIXED TESTING Free action needs to either a move or a build.  Currently just a move.
-	**BUG FIXED TESTING character bank is not unlocked when player has to choose a replacement.
-	***BUG character cards are going to the wrong spot in bank on exchange.
-	****BUG: FIXED TESTING don't allow any other action while route picker dialog is showing.  Disable everything until route selected (or canceled)
-	****BUG: FIXED TESTING when moving house from a village (and maybe city?) need to empty the node in pending action.  Restore it in undo.
-	****BUG: FIXED TESTING handle dropping things in same city/village where already placed (house, palace, architect).  Don't trigger another move/build action.
-	****BUG: FIXED TESTING city snap back uses board rotation, need to add saved rotation in player placed houses and use it on snapBack for house drop
-	****BUG: FIXED TESTING Handle more than 6 houses of a color in a city
-	**BUG FIXED TESTING if 8 cities in route, last one is cut off in dialog button text
-	***BUG FIXED TESTING palaces are not locked after placing
-	**BUG; FIXED TESTING when building house in city, don't pick city/village option if city only is avaialbe in unused turn actions (see TODO on asking player)
-	***BUG: FIXED TESTING character free action not being removed from turn_actions on exchanging away Builder character
-	***BUG: FIXED TESTING replacing character does not immediately update benefit.  eg: replacing with Sadhus (#3) in a swap just before scoring
-	**BUG: FIXED TESTING Need to lock everything, disable track buttons, etc. when extra action is clicked.  Unlock when done to match turn actions.
-	--TODO: DONE TESTING refactored character bonus assignment.  messy.  check for bugs.
-	--TODO: DONE TESTING add verbose game prints for undo actions
-	--TODO: DONE TESTING final scoring dialog
-	--TODO: DONE TESTING allow player to choose if free action should be used vs paid action. Idea: make it clickable to signify preference?
-	--TODO: DONE TESTING add player prefs dialog.
-	--TODO: DONE TEST end game
-	--TODO: DONE TESTING Hide help text when choosing actions and click done.  Show again if clicked modify button.  Visual cue to others who's still choosing.
-	--TODO: DONE TESTING set turn order marker dark (brown?) when turn has been taken.  Visual cue to others.
-	--TODO: DONE TESTING move the action list display to the player board XML UI.  Avoids the flip problem with the dial.
-	--TODO: DONE TESTING Random rotate dial during action selection.  Configurable in player prefs.
-
 ==========================================================================================]]
 
 env = {}
+env.version = "1.0.0 Beta"
 env.test = {}
-env.test.trace = true
-env.test.debug = false
-env.test.in_dev = false
-env.test.force_fresh_save = false
-env.test.save_positions = false
-env.test.test_palace_sync = true --TESTING player placed palace sync with network palaces.  Looking for bug repro.
+env.trace = true
+env.debug = false
+env.in_dev = false
+env.force_fresh_save = true
+env.save_positions = false
+env.test_palace_sync = true --TESTING player placed palace sync with network palaces.  Looking for bug repro.
 
--- env.test.auto_switch = true
--- env.test.players = {"Blue","Red","Yellow","Purple","Green",}
--- env.test.players = {"Yellow","Red","Blue","Purple",}
--- env.test.players = {"Yellow","Purple",}
--- env.test.players = {"Green","Blue",}
--- env.test.players = {"Green","Red","Blue"}
+-- env.test_players = {"Blue","Red","Yellow","Purple","Green",}
+-- env.test_players = {"Yellow","Red","Blue","Purple",}
+-- env.test_players = {"Yellow","Purple",}
+-- env.test_players = {"Green","Blue",}
+-- env.test_players = {"Green","Red","Blue"}
 
 env.game = {}
 env.game.fill_delay = 1
@@ -115,10 +69,25 @@ GD = {}
 TTS Game Load
 ********************************]]
 function onLoad(saved_data)
+	log("*************************************")
+  log("Disigner:       Wolfgang Kramer and Michael Kiesling")
+  log("Artist:         Franz Vohwinkel")
+  log("Year Released:  2004")
+  log("Publisher:      Phalanx Games B.V., Phalanx Games Deutschland, Asmodee, KDS Distribuzione (Italy), Mayfair Games")
+  log("TTS Scripting: David Veach, 2023,2024")
+  log("Version: "..env.version)
+  log("*************************************")
+	UI.setAttribute("game_version", "text", "Version: "..env.version)
+	if env.test_players then
+		log("WARN: test harness player simulation enabled")
+    broadcastToAll("Simulated Test Player mode enabed, Auto Switch enabled")
+    UI.setAttribute("start_title","text","After all players are seated:\n*** Auto Switch Enabled *** ")
+	end
+
 	-- if true then return end --for testing global UI stuff
-	if env.test.force_fresh_save then saved_data = "" end
+	if env.force_fresh_save then saved_data = "" end
 	--Initialize stuff
-	if not(env.test.in_dev) then
+	if not(env.in_dev) then
 		getObjectFromGUID(C.board_guid).interactable = false
 		getObjectFromGUID(C.palace_object_guid).setInvisibleTo(Color.list)
 		getObjectFromGUID(C.house_object_guid).setInvisibleTo(Color.list)
@@ -170,11 +139,11 @@ end
 HACK: reload an object's XML UI
 ********************************]]
 function reloadUI(guid)
-	if env.test.trace then log("reloadUI() guid: "..tostring(guid)) end
+	if env.trace then log("reloadUI() guid: "..tostring(guid)) end
 	if guid then
 		local obj = getObjectFromGUID(guid)
 		if obj ~= nil then
-			if env.test.debug then log("reloading object UI for "..obj.getName()..", guid "..tostring(guid)) end
+			if env.debug then log("reloading object UI for "..obj.getName()..", guid "..tostring(guid)) end
 			obj.UI.setXml(obj.UI.getXml())
 		else
 			log("***WARN: reloadUI() unable to get object for "..tostring(guid))  --DEBUG LOGGING
@@ -189,7 +158,7 @@ Save game state
 ********************************]]
 function onSave()
 	local saved_data = ""
-  if not(env.test.force_fresh_save) then
+  if not(env.force_fresh_save) then
 		saved_data = JSON.encode(GD)
   end
   return saved_data
@@ -200,7 +169,7 @@ Restore the game state.
 TODO: implement
 ********************************]]
 function restoreGameState()
-	if env.test.trace then log("restoreGameState()") end
+	if env.trace then log("restoreGameState()") end
 	if GD.game.stage ~= "setup" then
 		setupGlobalUI()
 		updateGovernorTrack()
@@ -211,23 +180,23 @@ function restoreGameState()
 	end
 	Wait.time(function()
 		--[[ replay saved global UI setAttributes --]]
-		if env.test.debug then log("replay saved global UI setAttributes") end
+		if env.debug then log("replay saved global UI setAttributes") end
 	  for key,value in pairs(GD.state.global_UI) do
 	    local id = Split(key, '|')[1]
 	    local field = Split(key, '|')[2]
 	    local success = UI.setAttribute(id, field, value)
-	    if not(success) and env.test.debug then
+	    if not(success) and env.debug then
 	      log("ERROR: restoreGameState(): Unable to setAttribute for global UI "..field.." on id "..id.." to "..tostring(value))
 	    end
 	  end
 		--[[ replay saved board UI setAttributes --]]
-	  if env.test.debug then log("replay saved board UI setAttributes") end
+	  if env.debug then log("replay saved board UI setAttributes") end
 	  local board = getObjectFromGUID(C.board_guid)
 	  for key,value in pairs(GD.state.board_UI) do
 	    local id = Split(key, '|')[1]
 	    local field = Split(key, '|')[2]
 			local success = board.UI.setAttribute(id, field, value)
-	    if not(success) and env.test.debug then
+	    if not(success) and env.debug then
 	      log("ERROR: restoreGameState(): Unable to setAttribute for board UI "..field.." on id "..id.." to "..tostring(value))
 	    end
 	  end
@@ -242,7 +211,7 @@ Saves attribute update to be replayed on restore.
 TODO: convert calls to use
 *********************************]]
 function UI_setAttribute(id, field, value)
-  if env.test.trace2 then log("UI_setAttribute()") end
+  if env.trace2 then log("UI_setAttribute()") end
   assert(type(id) == "string", "UI_setAttribute(): id must be a string")
   assert(type(field) == "string", "UI_setAttribute(): field must be a string")
   assert(value or value==false, "UI_setAttribute(): value missing")
@@ -256,7 +225,7 @@ Saves attribute update to be replayed on restore.
 TODO: convert calls to use
 *********************************]]
 function board_UI_setAttribute(id, field, value)
-	if env.test.trace2 then log("board_UI_setAttribute()") end
+	if env.trace2 then log("board_UI_setAttribute()") end
 	assert(type(id) == "string", "board_UI_setAttribute(): id must be a string")
 	assert(type(field) == "string", "board_UI_setAttribute(): field must be a string")
 	assert(value or value==false, "board_UI_setAttribute(): value missing")
@@ -270,7 +239,7 @@ end
 Setup: Handler for start game options
 ********************************]]
 function startOptionsBtn(player, value, id)
-	if env.test.trace then log("startGameBtn() "..player.color..", "..id..": "..tostring(value)) end
+	if env.trace then log("startGameBtn() "..player.color..", "..id..": "..tostring(value)) end
 	local setting = (value == 'True')
 	UI_setAttribute(id, "isOn", setting)
 	if id == "opt_use_auction" then
@@ -290,8 +259,8 @@ end
 Setup: A player clicked start game.
 ********************************]]
 function startGameBtn(player, btn, id)
-	if env.test.trace then log("startGameBtn() "..player.color) end
-	if not(env.test.players) and #getSeatedPlayers() < 2 then
+	if env.trace then log("startGameBtn() "..player.color) end
+	if not(env.test_players) and #getSeatedPlayers() < 2 then
 		broadcastToAll("At least 2 players needed to play")
 		return
 	end
@@ -303,7 +272,7 @@ end
 Player clicked a row on the Governor track
 ********************************]]
 function governorClick(player, btn, id)
-	if env.test.trace then log("governorClick() "..player.color..", id: "..tostring(id)) end
+	if env.trace then log("governorClick() "..player.color..", id: "..tostring(id)) end
 	if GD.game.select_route_dialog then log("Ignoring: route selection dialog open"); return end
 	if player.color ~= GD.game.current_player_color then return end
 	if GD.game.players[player.color].governor_clicked then return end --guard double clicks
@@ -381,7 +350,7 @@ end
 Handler for button clicks on player board
 ********************************]]
 function playerBoardClick(player, btn, id)
-	if env.test.trace then log("playerBoardClick(): "..player.color..", id = "..id) end
+	if env.trace then log("playerBoardClick(): "..player.color..", id = "..id) end
 	local board_color = Split(id,'_')[1]
 	if player.color ~= board_color then return end
 	local action = Split(id,'_')[2]
@@ -401,8 +370,8 @@ end
 Toggle the city status display for the player who clicked.
 ********************************]]
 function statusClick(player, btn, id)
-	if env.test.trace then log("statusClick() id: "..tostring(id)) end
-	-- if env.test.debug then log(GD.game.status_visibility) end
+	if env.trace then log("statusClick() id: "..tostring(id)) end
+	-- if env.debug then log(GD.game.status_visibility) end
 	local players = Split(GD.game.status_visibility,'|')
 	local index = indexOf(players, player.color)
 	if index > 0 then
@@ -418,7 +387,6 @@ function statusClick(player, btn, id)
 			GD.game.status_visibility = GD.game.status_visibility .."|"..pcol
 		end
 	end
-	-- if env.test.debug then log("Setting vis to "..GD.game.status_visibility) end
 	UI_setAttribute("status_info","visibility",GD.game.status_visibility)
 end
 
@@ -427,7 +395,7 @@ Handler for clicks in the player preferences dialog.
 Overloaded to handle both button clicks and toggle settings.
 ********************************]]
 function prefsOptionClick(player, value, id)
-	if env.test.trace then log("prefsOptionClick() "..player.color..", value: "..tostring(value)..", id: "..tostring(id)) end
+	if env.trace then log("prefsOptionClick() "..player.color..", value: "..tostring(value)..", id: "..tostring(id)) end
 	local plr = GD.game.players[player.color]
 	local action = Split(id,'_')[2]
 	local setting = (value == 'True')
@@ -462,9 +430,9 @@ House and palace drops off board are snapped back.
 TODO: disable DEVELOPMENT stuff
 ********************************]]
 function onObjectDrop(pcol, obj)
-	if env.test.trace then log("onObjectDrop(): pcol "..pcol..", obj "..obj.getGUID()) end
+	if env.trace then log("onObjectDrop(): pcol "..pcol..", obj "..obj.getGUID()) end
 	--/// DEV ///
-	if env.test.save_positions then
+	if env.save_positions then
 		str = "Global: "
 		str = str .. tostring(obj.getPosition())
 		str = str .. "\nBoard: "
@@ -536,7 +504,7 @@ Handle click on the extra action token.
 Enable extra action selection on the player dial.
 ********************************]]
 function extraActionToken(obj, pcol, rclick)
-	if env.test.trace then log("extraActionToken() "..obj.getName()..", "..pcol..", "..tostring(rclick)) end
+	if env.trace then log("extraActionToken() "..obj.getName()..", "..pcol..", "..tostring(rclick)) end
 	if GD.game.select_route_dialog then log("Ignoring: route selection dialog open"); return end
 	if pcol ~= obj.getName() then return end
 	--enable extra action selection on player board and disable Done/Undo buttons
@@ -566,7 +534,7 @@ end
 Handles when player clicks 'Set' or 'Cancel' when using an extra action token.
 ********************************]]
 function extraActionClick(player, btn, id)
-	if env.test.trace then log("extraActionClick() "..player.color..", "..id) end
+	if env.trace then log("extraActionClick() "..player.color..", "..id) end
 	local splits = Split(id,"_")
   if player.color ~= splits[1] then return end
 	local dial = getObjectFromGUID(C.action_dials[player.color])
@@ -659,7 +627,7 @@ function penaltyDialogBtn(player, btn, id)
 	log("penaltyDialogBtn() "..player.color..", "..tostring(id))
 	if player.color ~= GD.game.current_player_color then return end
 	local command = Split(id,'_')[3]
-	if env.test.debug then log("action is "..tostring(command)) end
+	if env.debug then log("action is "..tostring(command)) end
 	if command == "ok" then
 		for _,action in ipairs(GD.game.players[player.color].turn_actions) do
 			if action.status ~= "Done" then action.status = "Failed" end
@@ -681,7 +649,7 @@ Flip dial face up and set state back to action selection.
 Enable done button on player board.
 ********************************]]
 function dialModifyClick(player, btn, id)
-	if env.test.trace then log("dialModifyClick(): id="..tostring(id)) end
+	if env.trace then log("dialModifyClick(): id="..tostring(id)) end
 	GD.game.players[player.color].actions_set = false
 	local dial = getObjectFromGUID(C.action_dials[player.color])
 	dial.call("hideMe")
@@ -696,7 +664,7 @@ If 'Done', finalize the selection in playerDone().
 if 'Undo' undo the selection in playerUndo().
 ********************************]]
 function replaceCharDialogBtn(player, btn, id)
-	if env.test.trace then log("replaceCharDialogBtn(): player "..player.color..", id="..tostring(id)) end
+	if env.trace then log("replaceCharDialogBtn(): player "..player.color..", id="..tostring(id)) end
 	local command = Split(id,'_')[3]
 	local plr = GD.game.players[player.color]
 	local pending_action,pending_index
@@ -757,7 +725,7 @@ Click on a route selects that route for payout for architect move.
 TODO: click on opponent in header sorts routes by cost to that opponent.
 ********************************]]
 function routeSelectClick(player, btn, id)
-	if env.test.trace then log("statusClick() "..player.color..", id: "..tostring(id)) end
+	if env.trace then log("statusClick() "..player.color..", id: "..tostring(id)) end
 	if player.color ~= GD.game.current_player_color then return end
 	local plr = GD.game.players[player.color]
 	if id == "routes_dialog_cancel" then
@@ -816,7 +784,7 @@ function routeSelectClick(player, btn, id)
 end
 
 function freeActionBtnClick(player, btn, id)
-	if env.test.trace then log("freeActionBtnClick(): id="..tostring(id)) end
+	if env.trace then log("freeActionBtnClick(): id="..tostring(id)) end
 	if player.color ~= GD.game.current_player_color then return end
 	GD.game.players[player.color].prefer_free_action = not(GD.game.players[player.color].prefer_free_action)
 	updatePlayerActionUI(player.color)
@@ -828,7 +796,7 @@ end
 Randomly assign the 7 Governors to starting positions on the track.
 ********************************]]
 function setupGovernorTrack()
-	if env.test.trace then log("setupGovernorTrack()") end
+	if env.trace then log("setupGovernorTrack()") end
 	local temp = simpleDeepCopy(C.governors)
 	local row = 0
 	local ref = 7
@@ -852,7 +820,7 @@ Update the board UI with Governor images on the track.
 Assumes governor track data has been initialized.
 ********************************]]
 function updateGovernorTrack(update_status)
-	if env.test.trace then log("updateGovernorTrack()") end
+	if env.trace then log("updateGovernorTrack()") end
 	local update_status = update_status or true
 	for row=1,17 do
 		if row > 7 then
@@ -871,7 +839,7 @@ end
 Setup: initialize the game
 ********************************]]
 function startGame()
-	if env.test.trace then log("startGame()") end
+	if env.trace then log("startGame()") end
 	-- GD.game.stage = "setup"
 	GD.game.auction_characters = false --TODO: get this from start dialog
 	setupGovernorTrack()
@@ -882,7 +850,7 @@ function startGame()
 	--for testing, set solo player to start player color
 	local players = Player.getPlayers()
 	if #players == 1 then
-		if env.test.players and env.test.auto_switch then
+		if env.test_players then
 			Player[players[1].color].changeColor(GD.game.current_player_color)
 		end
 	end
@@ -893,7 +861,7 @@ Setup: setup the status UI for number of players
 Assumes GD.game.player_order is established.
 ********************************]]
 function setupGlobalUI()
-	if env.test.trace then log("setupGlobalUI()") end
+	if env.trace then log("setupGlobalUI()") end
 	local letters = {Yellow="Y",Red="R",Green="G",Blue="B",Purple="P",}
 	local xml=UI.getXmlTable()
 
@@ -963,7 +931,7 @@ function setupGlobalUI()
 		end
 		table.insert(status_table.children,2,row) --always next after header, pushing rest downward
 	end
-	if env.test.debug then
+	if env.debug then
 		for i,c in ipairs(status_table.children) do
 			if i > 1 then
 				log(tostring(i)..": id:"..c.attributes.id)
@@ -1036,10 +1004,10 @@ end
 Setup: initialize game for seated players
 ********************************]]
 function setupPlayers()
-	if env.test.trace then log("setupPlayers()") end
+	if env.trace then log("setupPlayers()") end
 	local seated = getSeatedPlayers()
-	if env.test.players ~= nil then
-		seated = simpleDeepCopy(env.test.players)
+	if env.test_players ~= nil then
+		seated = simpleDeepCopy(env.test_players)
 	end
 	GD.game.player_count = #seated
 	if GD.game.player_count < 2 then
@@ -1111,7 +1079,7 @@ remove unused player objects and place unused palaces
 Run as a coro with pauses between spawning objects.
 ********************************]]
 function coroFillPlayerBoards()
-	if env.test.trace then log("coroFillPlayerBoards(): START") end
+	if env.trace then log("coroFillPlayerBoards(): START") end
 	--private function to pause (yield) coro for a number of frames
 	local pauseMe = function(frames)
 		frames = frames or env.game.fill_delay
@@ -1233,7 +1201,7 @@ function coroFillPlayerBoards()
 	end
 	board_UI_setAttribute("governor_panel", "active", true)
 	reloadUI(C.board_guid)
-	if env.test.trace then log("coroFillPlayerBoards(): EXIT") end
+	if env.trace then log("coroFillPlayerBoards(): EXIT") end
 	return 1
 end
 
@@ -1241,7 +1209,7 @@ end
 Load 6 starting houses into player Quarry after setup
 ********************************]]
 function startingQuarry(pcol)
-	if env.test.trace then log("startingQuarry(): "..pcol) end
+	if env.trace then log("startingQuarry(): "..pcol) end
 	local quarry = GD.game.players[pcol].quarry
 	local pool = GD.game.players[pcol].pool
 	for i=1,6 do
@@ -1258,7 +1226,7 @@ end
 Move 2 houses from quarry
 ********************************]]
 function quarryAction(pcol)
-	if env.test.trace then log("startingQuarry(): "..pcol) end
+	if env.trace then log("startingQuarry(): "..pcol) end
 	local player = GD.game.players[pcol]
 	local quarry = player.quarry
 	local pool = player.pool
@@ -1290,7 +1258,7 @@ Finalize a starting character select action
 Player has clicked "Done"
 ********************************]]
 function setStartingCharacter(action)
-	if env.test.trace then log("setStartingCharacter()") end
+	if env.trace then log("setStartingCharacter()") end
 	if GD.game.stage ~= "select_starting_characters" then
 		log(("*** ERROR: setStartingCharacter() invalid game stage")) --shouldn't happen
 		return
@@ -1331,7 +1299,7 @@ Finalize an initial house placement action
 Player has clicked "Done"
 ********************************]]
 function setInitialPlacement(action)
-	if env.test.trace then log("setInitialPlacement()") end
+	if env.trace then log("setInitialPlacement()") end
 	if GD.game.stage ~= "initial_placement" then
 		log(("*** ERROR: setInitialPlacement() invalid game stage")) --shouldn't happen
 		return
@@ -1368,7 +1336,7 @@ end
 TODO: document
 ********************************]]
 function beginNextRound()
-	if env.test.trace then log("beginNextRound()") end
+	if env.trace then log("beginNextRound()") end
 	GD.game.current_round = GD.game.current_round + 1
 	if GD.env.verbose then broadcastToAll("Beginning round "..tostring(GD.game.current_round).." of max 10") end
 	moveMaharaja()
@@ -1421,7 +1389,7 @@ Process a dropped character card.
 Result depends on game stage.
 ********************************]]
 function characterDrop(pcol, obj)
-	if env.test.trace then log("characterDrop() "..tostring(pcol)..", "..obj.getGUID()) end
+	if env.trace then log("characterDrop() "..tostring(pcol)..", "..obj.getGUID()) end
 	local char_id = getCharacterId(obj.getGUID())
 	local board = getObjectFromGUID(C.board_guid)
 	local player = GD.game.players[pcol]
@@ -1580,7 +1548,7 @@ Process a dropped house.
 Result depends on game stage.
 ********************************]]
 function houseDrop(pcol, obj)
-	if env.test.trace then log("houseDrop()") end
+	if env.trace then log("houseDrop()") end
 	local board = getObjectFromGUID(C.board_guid)
 	local player = GD.game.players[pcol]
 	local color = obj.getName()
@@ -1588,7 +1556,7 @@ function houseDrop(pcol, obj)
 	--/////// local functions ///////
 	--[[TODO: document]]
 	local function snapBack(obj)
-		if env.test.trace then log("snapBack() "..tostring(obj)) end
+		if env.trace then log("snapBack() "..tostring(obj)) end
 		local pos,rot = getPlacedObjectSnap(obj.getGUID())
 		if pos then
 			obj.setPosition(pos)
@@ -1604,7 +1572,7 @@ function houseDrop(pcol, obj)
 	end
 	--[[TODO: document]]
 	local function placeVillageHouse(obj, node)
-		if env.test.trace then log("placeVillageHouse() "..tostring(obj)..", node "..tostring(node.id)) end
+		if env.trace then log("placeVillageHouse() "..tostring(obj)..", node "..tostring(node.id)) end
 		table.insert(node.houses,{g=obj.getGUID(),c=obj.getName()})
 		local pos = board.positionToWorld(Vector(node.center))
 		if GD.game.player_count > 2 then
@@ -1620,7 +1588,7 @@ function houseDrop(pcol, obj)
 	end
 	--[[TODO: document]]
 	local function placeCityHouse(obj, node)
-		if env.test.trace then log("placeCityHouse() "..tostring(obj)..", node "..tostring(node.id)) end
+		if env.trace then log("placeCityHouse() "..tostring(obj)..", node "..tostring(node.id)) end
 		local color = obj.getName()
 		local center = GD.network[node.id].center
 		local index = #node.houses[color] + 1
@@ -1644,7 +1612,7 @@ function houseDrop(pcol, obj)
 	local pos = obj.getPosition()
 	pos.y = 0
 	local node_index = closestNode(pos)
-	if env.test.debug then log("nearest is id "..tostring(node_index)..", type "..GD.network[node_index].type..", name "..GD.network[node_index].name) end
+	if env.debug then log("nearest is id "..tostring(node_index)..", type "..GD.network[node_index].type..", name "..GD.network[node_index].name) end
 	if node_index < 1 then
 		snapBack(obj)
 		return
@@ -1814,7 +1782,7 @@ end
 Process a dropped palace.
 ********************************]]
 function palaceDrop(pcol, obj)
-	if env.test.trace then log("palaceDrop()") end
+	if env.trace then log("palaceDrop()") end
 	local board = getObjectFromGUID(C.board_guid)
 	local player = GD.game.players[pcol]
 	local color = obj.getName()
@@ -1916,7 +1884,7 @@ Calculate route(s) from origin, display chooser if needed.
 Setup pending architect move action.
 ********************************]]
 function architectDrop(pcol, obj)
-	if env.test.trace then log("architectDrop(): "..pcol..", "..tostring(obj)) end
+	if env.trace then log("architectDrop(): "..pcol..", "..tostring(obj)) end
 	local board = getObjectFromGUID(C.board_guid)
 	local player = GD.game.players[pcol]
 	local color = obj.getName()
@@ -2000,12 +1968,12 @@ function architectDrop(pcol, obj)
 			if route.total_cost <= player.gold then
 				table.insert(tmp, route)
 			else
-				if env.test.debug then log("Route too expensive "..tostring(i)..": "..route.cities) end
+				if env.debug then log("Route too expensive "..tostring(i)..": "..route.cities) end
 			end
 		end
 		routes = tmp
 		if #routes == 0 then
-			if env.test.debug then log("All routes from node "..tostring(start_id).." to node "..dest_id.." cost more than player "..pcol.." gold") end
+			if env.debug then log("All routes from node "..tostring(start_id).." to node "..dest_id.." cost more than player "..pcol.." gold") end
 			if GD.env.verbose then broadcastToColor("Not enough gold", pcol) end
 			snapback(obj)
 			return
@@ -2023,7 +1991,7 @@ function architectDrop(pcol, obj)
 					shortest.len = route.length
 				else
 					route.total_cost = -1
-					if env.test.debug then log("removing duplicate 0 cost route "..route.cities) end
+					if env.debug then log("removing duplicate 0 cost route "..route.cities) end
 				end
 			end
 		end
@@ -2038,7 +2006,7 @@ function architectDrop(pcol, obj)
 						end
 						if same then
 							routes[j].total_cost = -1
-							if env.test.debug then log("removing duplicate cost route "..route.cities) end
+							if env.debug then log("removing duplicate cost route "..route.cities) end
 						end
 					end
 				end
@@ -2110,7 +2078,7 @@ end
 Start a player's action turn.
 ********************************]]
 function startPlayerTurn(pcol)
-	if env.test.trace then log("startPlayerTurn() for player "..tostring(pcol)) end
+	if env.trace then log("startPlayerTurn() for player "..tostring(pcol)) end
 	local player = GD.game.players[pcol]
 	assert(player,"Failed to locate player for color "..tostring(pcol))
 	player.pending_actions = {}
@@ -2204,19 +2172,19 @@ Process player Done click based on current game stage.
 	-- if more entries, repeat
 ********************************]]
 function playerDone(pcol)
-	if env.test.trace then log("playerDone(): "..pcol) end
+	if env.trace then log("playerDone(): "..pcol) end
 	local player = GD.game.players[pcol]
 	if GD.game.stage == "select_starting_characters" then  --Done during character selection
 		local action = player.pending_actions[1]
 		assert(action,"*** ERROR: missing starting character action")
 		setStartingCharacter(action)
-		if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
+		if env.debug then log("Player "..pcol.." finalize "..action.key.." action") end
 		table.remove(player.pending_actions, 1)
 	elseif GD.game.stage == "initial_placement" then  --Done during initial placement
 		local action = player.pending_actions[1]
 		assert(action,"*** ERROR: missing initial placement action")
 		setInitialPlacement(action)
-		if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end
+		if env.debug then log("Player "..pcol.." finalize "..action.key.." action") end
 		table.remove(player.pending_actions, 1)
 	elseif GD.game.stage == "select_actions" then  --Done during action selection
 		if player.choosing_extra_action then
@@ -2265,7 +2233,7 @@ function playerDone(pcol)
 		while #player.pending_actions > 0 do
 			local index = #player.pending_actions
 			local action = player.pending_actions[index]
-			if env.test.debug then log("Player "..pcol.." finalize "..action.key.." action") end  --DEBUG
+			if env.debug then log("Player "..pcol.." finalize "..action.key.." action") end  --DEBUG
 			if action.key == "track" then
 				player.governor_clicked = false
 			elseif action.key == "gold" then
@@ -2341,7 +2309,7 @@ end
 Check for end of round & start a new one otherwise start next players turn
 ********************************]]
 function endTurn(pcol)
-	if env.test.trace then log("endTurn() "..tostring(pcol)) end
+	if env.trace then log("endTurn() "..tostring(pcol)) end
 	--clear out all player turn data`
 	local player = GD.game.players[pcol]
 	player.has_actions = false
@@ -2358,7 +2326,7 @@ function endTurn(pcol)
 	else
 		charactersLock(pcol, true)
 	end
-	if env.test.test_palace_sync then testPlayerPlacedPalaceSync(pcol) end
+	if env.test_palace_sync then testPlayerPlacedPalaceSync(pcol) end
 	--update round and check for end of round or end of game
 	local index = indexOf(GD.game.remaining_round_players,pcol)
 	assert(index > 0,"***ERROR: could not locate player in remaining_round_players")
@@ -2380,7 +2348,7 @@ end
 Score the current city, check for endgame and advance to next round if not.
 ********************************]]
 function finishCurrentRound()
-	if env.test.trace then log("finishCurrentRound()") end
+	if env.trace then log("finishCurrentRound()") end
 	local city = GD.game.governor_track[7].city
 	if GD.env.verbose then printToAll("End of round "..tostring(GD.game.current_round)) end
 	scoreCity(city)
@@ -2401,7 +2369,7 @@ TODO: document
 TODO: add verbose prints of what action is undone
 ********************************]]
 function playerUndo(pcol)
-	if env.test.trace then log("playerUndo(): "..pcol) end
+	if env.trace then log("playerUndo(): "..pcol) end
 	local player = GD.game.players[pcol]
 	local function resetAction(pcol, action)
 		if action.is_free then
@@ -2416,7 +2384,7 @@ function playerUndo(pcol)
 	local actions = player.pending_actions
 	if #actions == 0 then return end
 	local action = actions[#actions]
-	if env.test.debug then log("action to undo:");log(action) end
+	if env.debug then log("action to undo:");log(action) end
 	if action.key == "select_starting_character" then
 		local obj = getObjectFromGUID(action.undo.guid)
 		obj.setPosition(action.undo.snapback.pos)
@@ -2685,7 +2653,7 @@ end
 TODO: implement and document
 ********************************]]
 function moveMaharaja()
-	if env.test.trace then log("moveMaharaja()") end
+	if env.trace then log("moveMaharaja()") end
 	-- move maha to next city position (1st in gov track table)
 	local board = getObjectFromGUID(C.board_guid)
 	local track = GD.game.governor_track
@@ -2716,7 +2684,7 @@ Second tie breaker is lowest character ID.
 --TODO rank all players and show a dialog of final rank
 ********************************]]
 function endGame()
-	if env.test.trace then log("endGame()") end
+	if env.trace then log("endGame()") end
 	-- most palaces built.
 	local winners, most_palaces = {}, 0
 	for pcol,player in pairs(GD.game.players) do
@@ -2787,7 +2755,7 @@ Sort third (second tiebreaker) by lowest character ID.
 Returns a sorted array of players {color, pdata}.
 ********************************]]
 function rankPlayers()
-	if env.test.trace then log("rankPlayers()") end
+	if env.trace then log("rankPlayers()") end
 	local rank = {}
 	--sort by palaces placed
 	for color,player in pairs(GD.game.players) do
@@ -2834,9 +2802,9 @@ end
 Calculate gold payouts for all players with presence in the city.
 ********************************]]
 function scoreCity(city)
-	if env.test.trace then log("doCityScoring(): "..tostring(city)) end
+	if env.trace then log("doCityScoring(): "..tostring(city)) end
 	local scores = GD.game.city_scores[city]
-	if env.test.debug then
+	if env.debug then
 		log("scores for city:")
 		log(scores)
 	end
@@ -2902,10 +2870,10 @@ Primary sort index is total cost for route
 TODO: use opp cost (when supplied) as secondary sort index
 ********************************]]
 function sortRoutes(pcol, opp)
-	if env.test.trace then log("sortRoutes() "..tostring(pcol)) end
+	if env.trace then log("sortRoutes() "..tostring(pcol)) end
 	assert(pcol, "***ERROR: missing player color")
 	local opp = opp or "none"
-	if env.test.debug then log("using opponent "..opp.." for secondary index") end
+	if env.debug then log("using opponent "..opp.." for secondary index") end
 	local player = GD.game.players[pcol]
 	local routes = player.route_table
 	assert(routes, "***ERROR: no route table for player "..pcol)
@@ -2940,7 +2908,7 @@ end
 Update the route dialog with latest route table for player and display it
 ********************************]]
 function updateRouteDialog(pcol)
-	if env.test.trace then log("updateRouteDialog() "..tostring(pcol)) end
+	if env.trace then log("updateRouteDialog() "..tostring(pcol)) end
 	assert(pcol, "***ERROR: missing player color")
 	local player = GD.game.players[pcol]
 	local routes = player.route_table
@@ -2979,7 +2947,7 @@ execute: if true then any immediate character bonuse is executed.
 ********************************]]
 function setCharacterBonus(pcol, execute)
 	if execute == nil then execute = true end
-	if env.test.trace then log("setCharacterBonus() "..tostring(pcol)..", execute: "..tostring(execute)) end
+	if env.trace then log("setCharacterBonus() "..tostring(pcol)..", execute: "..tostring(execute)) end
 	local player = GD.game.players[pcol]
 	assert(player.character_id and player.character_id > 0 and player.character_id <= 7, "***ERROR: setCharacterBonus(): Invalid character id")
 	player.character_bonus = nil
@@ -3032,7 +3000,7 @@ end
 TODO: need this in a fn?
 ********************************]]
 function failedActions(pcol)
-	if env.test.trace then log("failedActions() "..tostring(pcol)) end
+	if env.trace then log("failedActions() "..tostring(pcol)) end
 	for _,action in ipairs(GD.game.players[pcol].turn_actions) do
 		if action.status == "Failed" then return true end
 	end
@@ -3044,7 +3012,7 @@ Check to see if a player has any unfinished required actions.
 Return true if any, false if not.
 ********************************]]
 function hasRequiredActions(pcol)
-	if env.test.trace then log("hasRequiredActions() "..tostring(pcol)) end
+	if env.trace then log("hasRequiredActions() "..tostring(pcol)) end
 	for id,action in pairs(GD.game.players[pcol].turn_actions) do
 		if action.status == "" then return true end
 	end
@@ -3059,7 +3027,7 @@ Return reference to a player turn action.  Nil if none found.
 ********************************]]
 function getAvailableAction(pcol, key, village)
 	local village = village or false
-	if env.test.trace then log("getAvailableAction() "..tostring(pcol)..", key: "..tostring(key)..", village: "..tostring(village)) end
+	if env.trace then log("getAvailableAction() "..tostring(pcol)..", key: "..tostring(key)..", village: "..tostring(village)) end
 	local player = GD.game.players[pcol]
 	if key == "build" then
 		if player.prefer_free_action and player.free_action and player.free_action.status == "" then
@@ -3103,7 +3071,7 @@ end
 Set the locked state of a player's houses in the build pool
 ********************************]]
 function buildPoolLock(pcol, locked)
-	if env.test.trace then log("buildPoolLock()") end
+	if env.trace then log("buildPoolLock()") end
 	locked = locked or false
 	for _,e in ipairs(GD.game.players[pcol].pool) do
 		if e.g then getObjectFromGUID(e.g).setLock(locked) end
@@ -3116,7 +3084,7 @@ locked: the lock state to set.
 NOTE: Always locks any player's palaces that have been placed. For safety.
 ********************************]]
 function unplayedPalacesLock(pcol, locked)
-	if env.test.trace then log("unplayedPalacesLock()") end
+	if env.trace then log("unplayedPalacesLock()") end
 	locked = locked or false
 	local player = GD.game.players[pcol]
 	for _,e in ipairs(player.palaces) do
@@ -3138,7 +3106,7 @@ If unlocking, only unlock last house placed in each network location.
 	Would definitely make this more complex so maybe not worth it.
 ********************************]]
 function placedHousesLock(pcol, locked)
-	if env.test.trace then log("placedHousesLock() "..tostring(pcol)..", "..tostring(locked)) end
+	if env.trace then log("placedHousesLock() "..tostring(pcol)..", "..tostring(locked)) end
 	locked = locked or false
 	if locked then
 		--just lock all of them, usually at end of a turn.
@@ -3180,7 +3148,7 @@ locked: Defaults to unlocked
 function charactersLock(pcol, locked)
 	locked = locked or false
 	pcol = pcol or "none"
-	if env.test.trace then log("charactersLock() "..tostring(pcol)..", locked = "..tostring(locked)) end
+	if env.trace then log("charactersLock() "..tostring(pcol)..", locked = "..tostring(locked)) end
 	if pcol == "bank" then
 		for id,char in ipairs(C.characters) do
 			local bank = true
@@ -3204,7 +3172,7 @@ For a given network node (that is a city) update the
 City score for each player
 ********************************]]
 function updateCityScores(node)
-	if env.test.trace then log("updateCityScores()") end
+	if env.trace then log("updateCityScores()") end
 	local function updateScores(node)
 		assert(node.type == "city", "***ERROR: updateCityScores() node "..tostring(node.id).." is not a city")
 		for _,pcol in ipairs(GD.game.player_order) do
@@ -3240,7 +3208,7 @@ Update city names and images from GD.game.governor_track
 Update corresponding player score for each associated city
 ********************************]]
 function updateStatusPanel()
-	if env.test.trace then log("updateStatusPanel()") end
+	if env.trace then log("updateStatusPanel()") end
 	for i,gov in ipairs(GD.game.governor_track) do
 		UI_setAttribute("status_city_name_"..gov.UI_row, "text", gov.city)
 		UI_setAttribute("status_city_image_"..gov.UI_row, "image", gov.city)
@@ -3266,7 +3234,7 @@ end
 Remove an object from player board data.
 ********************************]]
 function removeFromPlayerBoard(obj)
-	if env.test.trace then log("removeFromPlayerBoard()") end
+	if env.trace then log("removeFromPlayerBoard()") end
 	local player = GD.game.players[obj.getName()]
 	assert(player,"*** ERROR: removeFromPlayerBoard() could not locate player data")
 	if obj.memo == "palace" then
@@ -3295,7 +3263,7 @@ For placed houses, a tuple of pos,rot is returned
 Returns nil if nothing found for guid matching type.
 ********************************]]
 function getPlacedObjectSnap(guid)
-	if env.test.trace then log("getPlacedObjectSnap()") end
+	if env.trace then log("getPlacedObjectSnap()") end
 	local obj = getObjectFromGUID(guid)
 	assert(obj, "***ERROR: getPlacedObjectSnap() unable to get object ref")
 	for _,pcol in ipairs(GD.game.player_order) do
@@ -3331,7 +3299,7 @@ Return the snap back playerboard location for an object.
 Playerboard determined from object name(color))
 ********************************]]
 function getPlayerBoardLocation(obj)
-	if env.test.trace then log("getPlayerBoardLocation() "..tostring(obj.getGUID())) end
+	if env.trace then log("getPlayerBoardLocation() "..tostring(obj.getGUID())) end
 	local color = obj.getName()
 	for _,d in ipairs(GD.game.players[color].pool) do
 		if d.g == obj.getGUID() then return d.p end
@@ -3342,7 +3310,7 @@ function getPlayerBoardLocation(obj)
 	for _,d in ipairs(GD.game.players[color].quarry) do
 		if d.g == obj.getGUID() then return d.p end
 	end
-	if env.test.debug then log("getPlayerBoardLocation(): Nothing found on player board") end
+	if env.debug then log("getPlayerBoardLocation(): Nothing found on player board") end
 	return nil
 end
 
@@ -3351,7 +3319,7 @@ Update game player order sorted by current player character IDs
 TODO: actually update and update UI
 ********************************]]
 function updateTurnOrder()
-	if env.test.trace then log("updateTurnOrder()") end
+	if env.trace then log("updateTurnOrder()") end
 	--sort player order by character ID
 	local new_order
 	for pcol,pdata in pairs(GD.game.players) do
@@ -3370,7 +3338,7 @@ function updateTurnOrder()
 		end
 	end
 	GD.game.player_order = simpleDeepCopy(new_order)
-	if env.test.debug then
+	if env.debug then
 		log("New player order sorted by char ID:")
 		log(GD.game.player_order)
 	end
@@ -3388,7 +3356,7 @@ Returns color of current player
 ********************************]]
 function setNextPlayer(first)
 	first = first or false
-	if env.test.trace then log("setNextPlayer()") end
+	if env.trace then log("setNextPlayer()") end
 	local old_color = GD.game.current_player_color
 	if first then
 		GD.game.current_player = 1
@@ -3417,7 +3385,7 @@ function setNextPlayer(first)
 	end
 	GD.game.current_player_color = GD.game.player_order[GD.game.current_player]
 	broadcastToAll("Current player now "..GD.game.current_player_color)
-	if env.test.players and env.test.auto_switch then
+	if env.test_players then
 		if old_color != GD.game.current_player_color then
 			Player[old_color].changeColor(GD.game.current_player_color)
 		end
@@ -3432,7 +3400,7 @@ As is the radius is equal so dropping in a city edge
 might detect as a nearby village.  Minor thing.
 ********************************]]
 function closestNode(pos)
-	if env.test.trace then log("closestNode()") end
+	if env.trace then log("closestNode()") end
 	assert(pos, "***ERROR: closestNode() missing pos")
 	local board = getObjectFromGUID(C.board_guid)
 	local nearest_node = -1
@@ -3471,7 +3439,7 @@ TODO: implement and document
 ********************************]]
 function setGovernorButtons(on)
 	on = on or false
-	if env.test.trace then log("enableGovernorButtons() "..tostring(on)) end
+	if env.trace then log("enableGovernorButtons() "..tostring(on)) end
 	local board = getObjectFromGUID(C.board_guid)
 	for i=1,17 do
 		local id = "gov_"..tostring(i)
@@ -3494,7 +3462,7 @@ Update the player action UI with player's current action state
 --TODO: move UI specifics to be self contained in player board?  pass turn_actions list and free_action boolean as parameters?
 ********************************]]
 function updatePlayerActionUI(pcol)
-	if env.test.trace then log("updatePlayerActionUI() "..tostring(pcol)) end
+	if env.trace then log("updatePlayerActionUI() "..tostring(pcol)) end
 	local player = GD.game.players[pcol]
 	local player_board = getObjectFromGUID(C.player_boards[pcol])
 	for i=1,6 do
@@ -3553,9 +3521,9 @@ params:
 			'pointer-1', 'pointer-2', 'pointer-3'
 ********************************]]
 function addDialAction(params)
-	if env.test.trace then log("addDialAction()") end
+	if env.trace then log("addDialAction()") end
 	assert(params, "***ERROR addDialAction(): missing params")
-	if env.test.debug then log(params) end
+	if env.debug then log(params) end
 	local pcol = params.player_color
 	assert(pcol,"***ERROR addDialAction(): missing player_color param")
 	local dial_index = params.dial_index
@@ -3598,7 +3566,7 @@ end
 Setup: initialize network data
 ********************************]]
 function setupNetwork()
-	if env.test.trace then log("setupNetwork()") end
+	if env.trace then log("setupNetwork()") end
 	GD.network = simpleDeepCopy(NETWORK)
 	for i,node in ipairs(GD.network) do
 		node.center = CENTERS[i]
@@ -3620,7 +3588,7 @@ end
 Setup: initialize path table
 ********************************]]
 function setupPathTable()
-	if env.test.trace then log("setupPathTable()") end
+	if env.trace then log("setupPathTable()") end
 	GD.path_table = simpleDeepCopy(PATH_TABLE)
 end
 
@@ -3635,7 +3603,7 @@ Closed Path initialized to an empty cost table.
 If no player color given, all Path costs will be initialized to empty.
 ********************************]]
 function updatePathTable(pcol)
-	if env.test.trace then log("updatePathTable() "..tostring(pcol)) end
+	if env.trace then log("updatePathTable() "..tostring(pcol)) end
 	for i,path in ipairs(GD.path_table) do
 		path.open = true
 		for _,v in ipairs(path.villages) do
@@ -3683,7 +3651,7 @@ able to consolidate this into one table
 Returns a table of discovered routes.
 ********************************]]
 function buildRouteTable(start_id, dest_id)
-	if env.test.trace then log("buildRouteTable() start: "..tostring(start_id)..", dest: "..tostring(dest_id)) end
+	if env.trace then log("buildRouteTable() start: "..tostring(start_id)..", dest: "..tostring(dest_id)) end
 	local sub_debug = false
 	local start, dest
 	local route_table = {}
@@ -3692,7 +3660,7 @@ function buildRouteTable(start_id, dest_id)
 		if conn.network_id == start_id then start = id end
 		if conn.network_id == dest_id then dest = id end
 	end
-	if env.test.debug then log("connections start: "..tostring(start)..", dest: "..tostring(dest)) end
+	if env.debug then log("connections start: "..tostring(start)..", dest: "..tostring(dest)) end
 	--[[///////////////////////////////////////////////////////////
 	Recursively crawl the neighbors of a city.
 	Ignore loops back to start.

@@ -195,9 +195,18 @@ end
 
 --[[ *****************************
 Enable dial back button (Modify).
+rotate: [bool] true (default) if user prefs set to rotate dial randomly
 ********************************]]
-function enableBackButton()
-  if env.test.trace then log(gid..": enableBackButton()") end
+function enableBackButton(rotate)
+  if env.test.trace then log(gid..": enableBackButton() "..tostring(rotate)) end
+  if rotate == nil then rotate = true end
+  --if Dial rotated adjust UI rotation to keep button perspective for user
+  if rotate then
+    local r = self.getRotation()
+    local val = r.y - 180
+    log("Rotating back button "..tostring(val).." degrees")
+    self.UI.setAttribute("back_button_panel","rotation","180 0 "..tostring(val))
+  end
   self.UI.setAttribute("back_button_panel","active",true)
   GD.state.back_button_enabled = true
 end

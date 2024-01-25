@@ -18,7 +18,8 @@ Credits
 BGG url:  https://boardgamegeek.com/boardgame/9440/maharaja-game-palace-building-india
 
  	-DONE: 1.0.0 XML standardization and cleanup, defaults
-	-TODO: 1.0.0 better dial back button image, randomize it's rotation as well
+	-DONE: 1.0.0 better dial back button image, adjust image rotation for dial random rotation
+	-DONE: 1.0.0 add reload UI hot key fn
 
 	-TODO; implement starting auction
 	-TODO: implement route sorting on opponent selection (button in header of dialog)
@@ -43,7 +44,7 @@ env.test = {}
 env.trace = true
 env.debug = false
 env.in_dev = false
-env.force_fresh_save = true
+env.force_fresh_save = false
 env.save_positions = false
 env.test_palace_sync = true --TESTING player placed palace sync with network palaces.  Looking for bug repro.
 
@@ -133,10 +134,13 @@ function onLoad(saved_data)
 		UI_setAttribute("status_info","visibility",GD.game.status_visibility)
 		UI_setAttribute("startPanel","active",true)
 	end
+	log("Adding hotkey for ReloadUI()")
+  addHotkey("Reload all UI", function(player_color) reloadAllUI(player_color) end)
 end
 
 --[[ *****************************
 HACK: reload an object's XML UI
+TODO: is this needed now with hotkey fn?
 ********************************]]
 function reloadUI(guid)
 	if env.trace then log("reloadUI() guid: "..tostring(guid)) end
@@ -413,6 +417,13 @@ function prefsOptionClick(player, value, id)
 	elseif action == "randomDialRotate" then
 		UI_setAttribute(id, "isOn", setting)
 		plr.prefs.random_dial_rotate = setting
+		if not(plr.prefs.random_dial_rotate) then
+			--return dial to normal rotation in case it has been randomly rotated
+			local dial = getObjectFromGUID(C.action_dials[player.color])
+			local rot = dial.getRotation()
+			rot.y = 180
+			dial.setRotation(rot)
+		end
 	elseif action == "zeroCostRoute" then
 		UI_setAttribute(id, "isOn", setting)
 		plr.prefs.auto_select_zero_route = setting
@@ -2207,7 +2218,7 @@ function playerDone(pcol)
 				startPlayerTurn(setNextPlayer(FIRST))
 			else
 				local dial = getObjectFromGUID(C.action_dials[pcol])
-				dial.call("enableBackButton")
+				dial.call("enableBackButton", player.prefs.random_dial_rotate)
 				dial.call("disableDialButtons")
 				if not(dial.is_face_down) then dial.call("flipMe") end
 				getObjectFromGUID(C.player_boards[pcol]).call("setState",{done=false, active=false})
@@ -3890,6 +3901,32 @@ function getOffsets()
 		Notes.setNotes(s)
 	end
 end
+
+--[[ ******************************
+HACK: Force reload of object UIs for all objects that have them.
+Bind to a keypad key (usually #1) for easy access.
+*********************************]]
+function reloadAllUI(pcol)
+  if env.trace then log("reloadAllUI() "..tostring(pcol)) end
+  if env.debug then log("HACK: force player board images to load") end
+  local xml = UI.getXml()
+  if xml ~= nil and #xml > 0 then
+    log("Reloading UI for Global XML")
+    UI.setXml(xml)
+  else
+    if pcol != nil then broadcastToColor("reloadUI(): WARN: no global XML found!",pcol)
+    else log("reloadUI(): WARN: no global XML found!") end
+  end
+  for _,o in pairs(getAllObjects()) do
+    if not(contains({"Block","Figurine","Hand",}, o.tag)) then
+      log("Reloading UI for "..o.tag..": "..o.getGUID()..": "..o.getName())
+      o.UI.setXml(o.UI.getXml())
+    end
+  end
+  if pcol != nil then broadcastToColor("All UIs Reloaded", pcol)
+  else log("reloadUI(): All UIs Reloaded") end
+end
+
 
 require("tts-lib/utils")
 require("tts-maharaja/Constants")
